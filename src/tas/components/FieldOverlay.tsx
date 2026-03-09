@@ -1,10 +1,10 @@
 /**
  * FieldOverlay
  * Renders one positioned field on top of the template image.
+ * Uses inline styles for positioning (no Tailwind/Paragon needed for absolute placement).
  */
 
 import React from 'react';
-import { motion } from 'framer-motion';
 import { useTasStore } from '../store/tasStore';
 import { percentToPixels, calculateFontSize } from '../utils/positioning';
 import type { FormField, FieldPosition } from '../types';
@@ -13,13 +13,10 @@ interface FieldOverlayProps {
   field: FormField;
   position: FieldPosition;
   isSelected: boolean;
-  /** Displayed image width / height in px (after object-contain scaling) */
   imageWidth: number;
   imageHeight: number;
-  /** Pixel offset of image within its container */
   offsetX: number;
   offsetY: number;
-  /** Actual original image dimensions (for font-size consistency) */
   actualImageWidth: number;
   actualImageHeight: number;
   isReadOnly?: boolean;
@@ -46,71 +43,103 @@ export const FieldOverlay: React.FC<FieldOverlayProps> = ({
   const fieldValue = formData[field.id] ?? '';
   const hasValue = fieldValue.trim().length > 0;
   const isSubmitted = submission?.status === 'submitted';
+  const isInactive = isReadOnly || isSubmitted;
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!isReadOnly && !isSubmitted) {
-      openFieldEditor(field.id);
-    }
+    if (!isInactive) openFieldEditor(field.id);
   };
 
+  const borderColor = isInactive
+    ? 'transparent'
+    : isSelected
+    ? '#3b82f6'
+    : hasValue
+    ? '#22c55e'
+    : '#9ca3af';
+
+  const borderStyle = !isInactive && !isSelected && !hasValue ? 'dashed' : 'solid';
+
+  const bgColor = isInactive
+    ? 'transparent'
+    : isSelected
+    ? 'rgba(59,130,246,0.1)'
+    : hasValue
+    ? 'rgba(34,197,94,0.08)'
+    : 'rgba(255,255,255,0.15)';
+
   return (
-    <motion.div
-      layout
+    <div
       onClick={handleClick}
-      className={[
-        'absolute border-2 transition-colors',
-        isReadOnly || isSubmitted
-          ? 'cursor-default border-transparent'
-          : 'cursor-pointer hover:border-blue-400',
-        isSelected
-          ? 'border-blue-500 bg-blue-50/40'
-          : hasValue
-          ? 'border-green-400 bg-green-50/30'
-          : 'border-dashed border-gray-400/60 bg-white/20',
-      ].join(' ')}
       style={{
+        position: 'absolute',
         left: px.x + offsetX,
         top: px.y + offsetY,
         width: px.width,
         height: px.height,
+        border: `2px ${borderStyle} ${borderColor}`,
+        backgroundColor: bgColor,
+        cursor: isInactive ? 'default' : 'pointer',
+        boxSizing: 'border-box',
+        transition: 'border-color 0.15s ease, background-color 0.15s ease',
       }}
     >
-      {/* Label */}
-      {!isReadOnly && !isSubmitted && (
+      {/* Label badge above the field */}
+      {!isInactive && (
         <div
-          className="absolute left-0 bg-blue-600 text-white font-medium whitespace-nowrap rounded"
           style={{
-            fontSize: isMobile ? 7 : 11,
+            position: 'absolute',
+            left: 0,
             top: isMobile ? -15 : -22,
+            backgroundColor: '#2563eb',
+            color: '#fff',
+            fontWeight: 600,
+            whiteSpace: 'nowrap',
+            borderRadius: 3,
+            fontSize: isMobile ? 7 : 11,
             padding: isMobile ? '1px 3px' : '2px 6px',
             lineHeight: 1.2,
           }}
         >
           {field.label}
-          {field.required && <span className="text-red-300 ml-0.5">*</span>}
+          {field.required && <span style={{ color: '#fca5a5', marginLeft: 2 }}>*</span>}
         </div>
       )}
 
       {/* Value preview */}
       {hasValue && (
         <div
-          className="absolute inset-0 overflow-hidden font-medium text-gray-900 leading-tight"
-          style={{ fontSize: isMobile ? fontSize * 0.55 : fontSize, padding: 2 }}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            overflow: 'hidden',
+            fontWeight: 500,
+            color: '#111827',
+            lineHeight: 1.3,
+            fontSize: isMobile ? fontSize * 0.55 : fontSize,
+            padding: 2,
+          }}
         >
           {fieldValue}
         </div>
       )}
 
-      {/* Empty placeholder tap hint */}
-      {!hasValue && !isReadOnly && !isSubmitted && (
+      {/* Tap hint */}
+      {!hasValue && !isInactive && (
         <div
-          className="absolute inset-0 flex items-center justify-center text-gray-400"
-          style={{ fontSize: isMobile ? 8 : 11 }}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#9ca3af',
+            fontSize: isMobile ? 8 : 11,
+          }}
         >
           Tap to fill
         </div>
       )}
-    </motion.div>
+    </div>
   );
 };

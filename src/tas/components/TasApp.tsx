@@ -11,11 +11,14 @@
  */
 
 import React, { useEffect, useRef, useCallback } from 'react';
+import { Button, Badge } from '@openedx/paragon';
+import { ArrowBack } from '@openedx/paragon/icons';
 import { TemplateSelector } from './TemplateSelector';
 import { TemplateCanvas } from './TemplateCanvas';
 import { FieldEditorPopup } from './FieldEditorPopup';
 import { AutoSaveStatus } from './AutoSaveStatus';
 import { PdfPoller } from './PdfPoller';
+import { AdminApp } from './admin/AdminApp';
 import { useTasStore } from '../store/tasStore';
 import { submissionsApi } from '../services/api';
 
@@ -32,7 +35,6 @@ export const TasApp: React.FC = () => {
     clearSelection,
     isPreviewMode,
     setPreviewMode,
-    isMobile,
     setIsMobile,
     getSelectedField,
     isSaving,
@@ -132,10 +134,15 @@ export const TasApp: React.FC = () => {
 
   const isSubmitted = submission?.status === 'submitted';
 
+  // ─── Render: admin/staff → admin view ─────────────────────────────────────
+  if (mfeContext?.isStaff || mfeContext?.isInstructor) {
+    return <AdminApp />;
+  }
+
   // ─── Render: no template selected → selector ──────────────────────────────
   if (!selectedTemplate) {
     return (
-      <div className="h-full overflow-y-auto">
+      <div className="h-100 overflow-auto">
         <TemplateSelector />
       </div>
     );
@@ -145,29 +152,28 @@ export const TasApp: React.FC = () => {
   const selectedField = getSelectedField();
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="d-flex flex-column h-100">
       {/* Toolbar */}
-      <div className="flex items-center gap-2 px-4 py-2 bg-white border-b border-gray-200 shadow-sm flex-shrink-0">
+      <div className="d-flex align-items-center px-3 py-2 bg-white border-bottom shadow-sm flex-shrink-0">
         {/* Back */}
         {!isSubmitted && (
-          <button
-            type="button"
+          <Button
+            variant="tertiary"
+            size="sm"
+            iconBefore={ArrowBack}
             onClick={() => {
               if (window.confirm('Go back? Unsaved changes will be discarded.')) {
                 clearSelection();
               }
             }}
-            className="flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900 transition mr-1"
+            className="mr-1"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-            <span className="hidden sm:inline">Back</span>
-          </button>
+            <span className="d-none d-sm-inline">Back</span>
+          </Button>
         )}
 
         {/* Template name */}
-        <h2 className="font-semibold text-gray-900 text-sm flex-1 truncate">
+        <h2 className="font-weight-bold small flex-grow-1 mb-0 text-truncate mx-2">
           {selectedTemplate.name}
         </h2>
 
@@ -176,36 +182,38 @@ export const TasApp: React.FC = () => {
 
         {/* Preview toggle */}
         {!isSubmitted && (
-          <button
-            type="button"
+          <Button
+            variant="outline-primary"
+            size="sm"
             onClick={() => setPreviewMode(!isPreviewMode)}
-            className="text-xs px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition"
+            className="ml-2"
           >
             {isPreviewMode ? 'Edit' : 'Preview'}
-          </button>
+          </Button>
         )}
 
         {/* Submit */}
         {!isSubmitted && (
-          <button
-            type="button"
+          <Button
+            variant="brand"
+            size="sm"
             onClick={handleSubmit}
             disabled={isSaving}
-            className="text-xs px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium transition shadow-sm disabled:opacity-50"
+            className="ml-2"
           >
             Submit
-          </button>
+          </Button>
         )}
 
         {isSubmitted && (
-          <span className="text-xs px-3 py-1.5 rounded-lg bg-green-100 text-green-700 font-medium">
-            ✓ Submitted
-          </span>
+          <Badge variant="success" className="ml-2 px-3 py-2">
+            &#10003; Submitted
+          </Badge>
         )}
       </div>
 
       {/* Canvas area */}
-      <div className="flex-1 overflow-hidden relative">
+      <div className="flex-grow-1 overflow-hidden position-relative">
         <TemplateCanvas template={selectedTemplate} readOnly={isSubmitted || isPreviewMode} />
       </div>
 
@@ -214,7 +222,7 @@ export const TasApp: React.FC = () => {
 
       {/* PDF / submission status banner */}
       {isSubmitted && (
-        <div className="flex-shrink-0 px-4 pb-4 bg-white border-t border-gray-100">
+        <div className="flex-shrink-0 px-4 pb-4 bg-white border-top">
           <PdfPoller />
         </div>
       )}

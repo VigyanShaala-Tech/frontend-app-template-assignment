@@ -18,7 +18,6 @@ interface Props {
 export const TemplateCanvas: React.FC<Props> = ({ template, readOnly = false }) => {
   const canvasRef = useRef<HTMLDivElement>(null);
   const [imageDims, setImageDims] = useState({ width: 0, height: 0 });
-  const [display, setDisplay] = useState({ width: 0, height: 0, offsetX: 0, offsetY: 0 });
   const { canvasState, setCanvasState, selectedFieldId, setSelectedFieldId } = useTasStore();
 
   // Resolve image dimensions
@@ -32,34 +31,6 @@ export const TemplateCanvas: React.FC<Props> = ({ template, readOnly = false }) 
     }
   }, [template]);
 
-  // Calculate displayed size with object-contain behaviour
-  useEffect(() => {
-    if (!canvasRef.current || !imageDims.width || !imageDims.height) return;
-
-    const update = () => {
-      if (!canvasRef.current) return;
-      const cw = canvasRef.current.offsetWidth;
-      const ch = canvasRef.current.offsetHeight;
-      const iAR = imageDims.width / imageDims.height;
-      const cAR = cw / ch;
-
-      let dw: number, dh: number, ox = 0, oy = 0;
-      if (cAR > iAR) {
-        dh = ch;
-        dw = dh * iAR;
-        ox = (cw - dw) / 2;
-      } else {
-        dw = cw;
-        dh = dw / iAR;
-        oy = (ch - dh) / 2;
-      }
-      setDisplay({ width: dw, height: dh, offsetX: ox, offsetY: oy });
-    };
-
-    update();
-    window.addEventListener('resize', update);
-    return () => window.removeEventListener('resize', update);
-  }, [imageDims]);
 
   const handleCanvasClick = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget) setSelectedFieldId(null);
@@ -139,28 +110,26 @@ export const TemplateCanvas: React.FC<Props> = ({ template, readOnly = false }) 
                   </div>
                 )}
 
-                {/* Field overlays */}
-                {display.width > 0
-                  ? template.fields.map((field) => {
-                      const position = template.field_positions[field.id];
-                      if (!position) return null;
-                      return (
-                        <FieldOverlay
-                          key={field.id}
-                          field={field}
-                          position={position}
-                          isSelected={selectedFieldId === field.id}
-                          imageWidth={display.width}
-                          imageHeight={display.height}
-                          offsetX={display.offsetX}
-                          offsetY={display.offsetY}
-                          actualImageWidth={imageNaturalW}
-                          actualImageHeight={imageNaturalH}
-                          isReadOnly={readOnly}
-                        />
-                      );
-                    })
-                  : null}
+                {/* Field overlays — positioned in natural image coordinate space */}
+                {template.fields.map((field) => {
+                  const position = template.field_positions[field.id];
+                  if (!position) return null;
+                  return (
+                    <FieldOverlay
+                      key={field.id}
+                      field={field}
+                      position={position}
+                      isSelected={selectedFieldId === field.id}
+                      imageWidth={imageNaturalW}
+                      imageHeight={imageNaturalH}
+                      offsetX={0}
+                      offsetY={0}
+                      actualImageWidth={imageNaturalW}
+                      actualImageHeight={imageNaturalH}
+                      isReadOnly={readOnly}
+                    />
+                  );
+                })}
               </div>
             </TransformComponent>
           </>

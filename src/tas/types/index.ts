@@ -137,3 +137,24 @@ export interface CanvasState {
   positionX: number;
   positionY: number;
 }
+
+// ─── Admin ────────────────────────────────────────────────────────────────────
+
+export interface AdminView {
+  activeTab: 'templates' | 'submissions';
+}
+
+export interface TemplateCreateBody {
+  template_type_id: string;
+  name: string;
+  description: string;
+  image_url: string;
+  image_width: number;
+  image_height: number;
+  thumbnail_url: string;
+  fields: FormField[];
+  field_positions: Record<string, FieldPosition>;
+  is_public: boolean;
+}
+
+export type TemplateUpdateBody = Partial<TemplateCreateBody>;

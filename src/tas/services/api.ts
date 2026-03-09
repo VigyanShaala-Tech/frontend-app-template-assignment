@@ -17,6 +17,8 @@ import type {
   SubmissionStatus,
   SubmissionVersionsResponse,
   PdfStatusResponse,
+  TemplateCreateBody,
+  TemplateUpdateBody,
 } from '../types';
 import {
   MOCK_TEMPLATE_TYPES,
@@ -49,9 +51,11 @@ export const templatesApi = {
     template_type?: string;
     is_public?: boolean;
     search?: string;
+    /** Admin: pass false to include inactive templates */
+    active_only?: boolean;
   }): Promise<TemplatesResponse> => {
     await delay(MOCK_DELAY);
-    let results = MOCK_TEMPLATES.filter((t) => t.is_active);
+    let results = params?.active_only === false ? [...MOCK_TEMPLATES] : MOCK_TEMPLATES.filter((t) => t.is_active);
     if (params?.is_public) {
       results = results.filter((t) => t.is_public);
     }
@@ -263,5 +267,100 @@ export const submissionsApi = {
       submission_id: id,
       versions: [...versions].sort((a, b) => b.version_number - a.version_number),
     };
+  },
+};
+
+// ─── Admin: Templates CRUD ────────────────────────────────────────────────────
+
+let templateIdCounter = 100;
+
+export const adminTemplatesApi = {
+  /**
+   * POST /admin/templates/
+   */
+  create: async (body: TemplateCreateBody): Promise<Template> => {
+    await delay(MOCK_DELAY);
+    const { MOCK_TEMPLATES, MOCK_TEMPLATE_TYPES } = await import('./mockData');
+    const id = `tpl-${++templateIdCounter}`;
+    const now = new Date().toISOString();
+    const templateType = MOCK_TEMPLATE_TYPES.find((t) => t.id === body.template_type_id);
+    const newTemplate: Template = {
+      id,
+      ...body,
+      template_type: templateType,
+      is_active: true,
+      created_by: 'admin',
+      created_at: now,
+      updated_at: now,
+    };
+    MOCK_TEMPLATES.push(newTemplate);
+    return newTemplate;
+  },
+
+  /**
+   * PATCH /admin/templates/{id}/
+   */
+  update: async (id: string, body: TemplateUpdateBody): Promise<Template> => {
+    await delay(MOCK_DELAY);
+    const { MOCK_TEMPLATES, MOCK_TEMPLATE_TYPES } = await import('./mockData');
+    const idx = MOCK_TEMPLATES.findIndex((t) => t.id === id);
+    if (idx === -1) throw new Error(`Template ${id} not found`);
+    const now = new Date().toISOString();
+    const templateType = body.template_type_id
+      ? MOCK_TEMPLATE_TYPES.find((t) => t.id === body.template_type_id)
+      : MOCK_TEMPLATES[idx].template_type;
+    const updated: Template = {
+      ...MOCK_TEMPLATES[idx],
+      ...body,
+      template_type: templateType,
+      updated_at: now,
+    };
+    MOCK_TEMPLATES[idx] = updated;
+    return updated;
+  },
+
+  /**
+   * DELETE /admin/templates/{id}/
+   */
+  delete: async (id: string): Promise<void> => {
+    await delay(MOCK_DELAY);
+    const { MOCK_TEMPLATES } = await import('./mockData');
+    const idx = MOCK_TEMPLATES.findIndex((t) => t.id === id);
+    if (idx === -1) throw new Error(`Template ${id} not found`);
+    MOCK_TEMPLATES.splice(idx, 1);
+  },
+
+  /**
+   * PATCH /admin/templates/{id}/toggle-active/
+   */
+  toggleActive: async (id: string): Promise<Template> => {
+    await delay(MOCK_DELAY);
+    const { MOCK_TEMPLATES } = await import('./mockData');
+    const idx = MOCK_TEMPLATES.findIndex((t) => t.id === id);
+    if (idx === -1) throw new Error(`Template ${id} not found`);
+    MOCK_TEMPLATES[idx] = { ...MOCK_TEMPLATES[idx], is_active: !MOCK_TEMPLATES[idx].is_active };
+    return MOCK_TEMPLATES[idx];
+  },
+};
+
+// ─── Admin: Submissions read ──────────────────────────────────────────────────
+
+export const adminSubmissionsApi = {
+  /**
+   * GET /admin/submissions/  — list all submissions across students
+   */
+  list: async (params?: {
+    course_id?: string;
+    usage_key?: string;
+    status?: SubmissionStatus;
+  }): Promise<Submission[]> => {
+    await delay(MOCK_DELAY);
+    let results = Object.values(submissionStore);
+    if (params?.course_id) results = results.filter((s) => s.course_id === params.course_id);
+    if (params?.usage_key) results = results.filter((s) => s.usage_key === params.usage_key);
+    if (params?.status) results = results.filter((s) => s.status === params.status);
+    return results.sort(
+      (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
+    );
   },
 };

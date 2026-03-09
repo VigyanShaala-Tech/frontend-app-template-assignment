@@ -6,7 +6,12 @@
 
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
+import {
+  Spinner,
+  Alert,
+  Badge,
+  Card,
+} from '@openedx/paragon';
 import { blockTemplatesApi, templatesApi } from '../services/api';
 import { useTasStore } from '../store/tasStore';
 import type { Template } from '../types';
@@ -39,22 +44,21 @@ export const TemplateSelector: React.FC = () => {
 
   if (isLoading || loadingFull) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div
-          className="inline-block h-10 w-10 rounded-full border-4 border-solid border-blue-600 border-r-transparent animate-spin"
-          role="status"
-        />
+      <div className="d-flex align-items-center justify-content-center" style={{ minHeight: '16rem' }}>
+        <Spinner animation="border" variant="primary" screenReaderText="Loading templates" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 p-6 text-center">
-        <p className="text-red-600 font-semibold mb-1">Failed to load templates</p>
-        <p className="text-sm text-gray-500">
-          {error instanceof Error ? error.message : 'Unknown error'}
-        </p>
+      <div className="d-flex flex-column align-items-center justify-content-center p-4 text-center" style={{ minHeight: '16rem' }}>
+        <Alert variant="danger" className="w-100">
+          <Alert.Heading>Failed to load templates</Alert.Heading>
+          <p className="mb-0 small">
+            {error instanceof Error ? error.message : 'Unknown error'}
+          </p>
+        </Alert>
       </div>
     );
   }
@@ -64,57 +68,58 @@ export const TemplateSelector: React.FC = () => {
 
   if (templates.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 p-6 text-center">
-        <p className="text-gray-600 font-semibold">No templates assigned to this block</p>
-        <p className="text-sm text-gray-400 mt-1">Please contact your instructor.</p>
+      <div className="d-flex flex-column align-items-center justify-content-center p-4 text-center" style={{ minHeight: '16rem' }}>
+        <Alert variant="info" className="w-100">
+          <Alert.Heading>No templates assigned to this block</Alert.Heading>
+          <p className="mb-0 small">Please contact your instructor.</p>
+        </Alert>
       </div>
     );
   }
 
   return (
-    <div className="p-4 md:p-6">
-      <div className="mb-5">
-        <h2 className="text-xl font-bold text-gray-900">Choose a Template</h2>
-        <p className="text-sm text-gray-500 mt-1">
+    <div className="p-4">
+      <div className="mb-4">
+        <h2 className="font-weight-bold">Choose a Template</h2>
+        <p className="small text-muted mt-1">
           Select a template below to begin your assignment.
         </p>
         {submission && submission.status === 'submitted' && (
-          <div className="mt-3 px-4 py-2 bg-green-100 border border-green-300 rounded-lg text-green-800 text-sm">
-            ✓ You have already submitted this assignment.
-          </div>
+          <Alert variant="success" className="mt-3 mb-0">
+            You have already submitted this assignment.
+          </Alert>
         )}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-        {templates.map((template, index) => {
+      <div className="row">
+        {templates.map((template) => {
           const blockItem = blockItems.find((bi) => bi.template.id === template.id);
           return (
-            <motion.div
-              key={template.id}
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.07 }}
-            >
-              <button
-                type="button"
+            <div key={template.id} className="col-12 col-sm-6 col-lg-4 mb-4">
+              <Card
+                isClickable
                 onClick={() => handleSelect(template, blockItem?.template_block_id ?? '')}
-                className="w-full text-left bg-white rounded-2xl shadow hover:shadow-lg transition-all duration-200 overflow-hidden border border-gray-100 hover:border-blue-300 group"
+                className="h-100"
               >
-                {/* Thumbnail */}
-                <div className="aspect-[3/4] bg-gradient-to-br from-blue-50 to-indigo-100 relative overflow-hidden">
-                  {template.thumbnail_url || template.image_url ? (
-                    <img
-                      src={template.thumbnail_url || template.image_url}
-                      alt={template.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
+                <Card.ImageCap
+                  src={template.thumbnail_url || template.image_url || ''}
+                  srcAlt={template.name}
+                  fallbackSrc=""
+                  imageLoadingType="eager"
+                  skeletonHeight={220}
+                >
+                  {!(template.thumbnail_url || template.image_url) && (
+                    <div
+                      className="d-flex align-items-center justify-content-center w-100"
+                      style={{ minHeight: '220px', background: '#e8f0fe' }}
+                    >
                       <svg
-                        className="w-16 h-16 text-blue-300"
+                        width="64"
+                        height="64"
                         fill="none"
-                        stroke="currentColor"
+                        stroke="#93b4f7"
                         viewBox="0 0 24 24"
+                        aria-hidden="true"
                       >
                         <path
                           strokeLinecap="round"
@@ -125,30 +130,33 @@ export const TemplateSelector: React.FC = () => {
                       </svg>
                     </div>
                   )}
-                  {/* Type badge */}
-                  {template.template_type && (
-                    <span className="absolute top-2 right-2 bg-white/90 backdrop-blur-sm text-xs font-medium text-gray-700 px-2 py-0.5 rounded-full">
-                      {template.template_type.name}
-                    </span>
-                  )}
-                </div>
-
-                {/* Info */}
-                <div className="p-4">
-                  <h3 className="font-semibold text-gray-900 group-hover:text-blue-600 transition truncate">
-                    {template.name}
-                  </h3>
+                </Card.ImageCap>
+                <Card.Header
+                  title={template.name}
+                  actions={
+                    template.template_type
+                      ? (
+                        <Badge variant="light">
+                          {template.template_type.name}
+                        </Badge>
+                      )
+                      : undefined
+                  }
+                />
+                <Card.Section>
                   {template.description && (
-                    <p className="text-xs text-gray-500 mt-1 line-clamp-2">{template.description}</p>
+                    <p className="small text-muted mb-2">{template.description}</p>
                   )}
-                  <div className="flex items-center gap-2 mt-2 text-xs text-gray-400">
-                    <span>{template.fields.length} field{template.fields.length !== 1 ? 's' : ''}</span>
-                    <span>•</span>
+                  <div className="d-flex align-items-center small text-muted">
+                    <span>
+                      {template.fields.length} field{template.fields.length !== 1 ? 's' : ''}
+                    </span>
+                    <span className="mx-1">&bull;</span>
                     <span>{template.is_public ? 'Public' : 'Private'}</span>
                   </div>
-                </div>
-              </button>
-            </motion.div>
+                </Card.Section>
+              </Card>
+            </div>
           );
         })}
       </div>
