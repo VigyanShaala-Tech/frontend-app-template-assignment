@@ -1,5 +1,17 @@
 @use "@openedx/paragon/styles/css/core/custom-media-breakpoints" as paragonCustomMediaBreakpoints;
 
-@import './example/index.scss';
 @import "~@edx/frontend-component-header/dist/index";
 @import "~@edx/frontend-component-footer/dist/footer";
+
+// ── TAS field overlay styles ────────────────────────────────────────────────
+
+.tas-canvas-wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+// Smooth border animation for field overlays
+[class*="FieldOverlay"] {
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}

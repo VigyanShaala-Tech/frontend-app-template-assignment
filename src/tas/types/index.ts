@@ -1,0 +1,139 @@
+/**
+ * TAS (Template Assignment System) TypeScript types
+ * Aligned with the TAS API contract v1
+ */
+
+// ─── Template Types (tas_template_types) ─────────────────────────────────────
+
+export interface TemplateType {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  icon: string;
+  is_active: boolean;
+}
+
+export interface TemplateTypesResponse {
+  count: number;
+  results: TemplateType[];
+}
+
+// ─── Fields & Positions ───────────────────────────────────────────────────────
+
+export interface FormField {
+  id: string;
+  label: string;
+  type: 'text' | 'textarea' | 'number' | 'date' | 'select' | 'checkbox' | 'radio';
+  required: boolean;
+  options?: string[];
+  placeholder?: string;
+}
+
+export interface FieldPosition {
+  x: number;       // 0–100 %
+  y: number;       // 0–100 %
+  width: number;   // 0–100 %
+  height: number;  // 0–100 %
+}
+
+// ─── Template (tas_templates) ─────────────────────────────────────────────────
+
+export interface Template {
+  id: string;
+  template_type_id: string;
+  template_type?: TemplateType;
+  name: string;
+  description: string;
+  image_url: string;
+  image_width: number;
+  image_height: number;
+  thumbnail_url: string;
+  fields: FormField[];
+  field_positions: Record<string, FieldPosition>;
+  is_public: boolean;
+  is_active: boolean;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TemplatesResponse {
+  count: number;
+  results: Template[];
+}
+
+// ─── Block ↔ Template Assignments (tas_template_blocks) ──────────────────────
+
+export interface TemplateBlockItem {
+  template_block_id: string;
+  sort_order: number;
+  template: {
+    id: string;
+    name: string;
+    template_type: { slug: string; name: string };
+    thumbnail_url: string;
+    image_width: number;
+    image_height: number;
+  };
+}
+
+export interface BlockTemplatesResponse {
+  usage_key: string;
+  course_id: string;
+  templates: TemplateBlockItem[];
+}
+
+// ─── Submissions (tas_submissions) ────────────────────────────────────────────
+
+export type SubmissionStatus = 'draft' | 'submitted';
+
+export interface Submission {
+  id: string;
+  template_block_id: string;
+  student_id: string;
+  course_id: string;
+  usage_key: string;
+  form_data: Record<string, string>;
+  status: SubmissionStatus;
+  version_number: number;
+  submitted_at: string | null;
+  pdf_url: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SubmissionVersion {
+  version_number: number;
+  form_data: Record<string, string>;
+  saved_at: string;
+}
+
+export interface SubmissionVersionsResponse {
+  submission_id: string;
+  versions: SubmissionVersion[];
+}
+
+export interface PdfStatusResponse {
+  pdf_url: string | null;
+  status?: 'generating';
+}
+
+// ─── MFE / OpenEdX context ────────────────────────────────────────────────────
+
+/** Values read from the OpenEdX JWT / LMS page context */
+export interface MfeContext {
+  usageKey: string;
+  courseId: string;
+  studentId: string;
+  isStaff: boolean;
+  isInstructor: boolean;
+}
+
+// ─── Canvas UI helpers ────────────────────────────────────────────────────────
+
+export interface CanvasState {
+  scale: number;
+  positionX: number;
+  positionY: number;
+}
