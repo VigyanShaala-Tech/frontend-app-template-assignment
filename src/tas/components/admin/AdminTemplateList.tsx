@@ -10,6 +10,7 @@ import type { Template } from '../../types';
 interface Props {
   onEdit: (template: Template) => void;
   onCreate: () => void;
+  onManageTypes: () => void;
 }
 
 const TYPE_VARIANT: Record<string, string> = {
@@ -18,7 +19,7 @@ const TYPE_VARIANT: Record<string, string> = {
   'worksheet':  'warning',
 };
 
-export const AdminTemplateList: React.FC<Props> = ({ onEdit, onCreate }) => {
+export const AdminTemplateList: React.FC<Props> = ({ onEdit, onCreate, onManageTypes }) => {
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
 
@@ -33,7 +34,8 @@ export const AdminTemplateList: React.FC<Props> = ({ onEdit, onCreate }) => {
   });
 
   const toggleMut = useMutation({
-    mutationFn: (id: string) => adminTemplatesApi.toggleActive(id),
+    mutationFn: ({ id, is_active }: { id: string; is_active: boolean }) =>
+      adminTemplatesApi.toggleActive(id, is_active),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-templates'] }),
   });
 
@@ -66,6 +68,14 @@ export const AdminTemplateList: React.FC<Props> = ({ onEdit, onCreate }) => {
           size="sm"
           style={{ width: 180 }}
         />
+
+        <Button
+          variant="tertiary"
+          size="sm"
+          onClick={onManageTypes}
+        >
+          Manage Types
+        </Button>
 
         <Button
           variant="primary"
@@ -148,7 +158,7 @@ export const AdminTemplateList: React.FC<Props> = ({ onEdit, onCreate }) => {
                     <Button
                       variant="tertiary"
                       size="sm"
-                      onClick={() => toggleMut.mutate(t.id)}
+                      onClick={() => toggleMut.mutate({ id: t.id, is_active: t.is_active })}
                       disabled={toggleMut.isPending}
                     >
                       {t.is_active ? 'Deactivate' : 'Activate'}

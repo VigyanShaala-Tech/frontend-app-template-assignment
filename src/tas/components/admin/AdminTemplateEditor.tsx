@@ -235,6 +235,8 @@ export const AdminTemplateEditor: React.FC<Props> = ({ template, onBack }) => {
   const [templateTypeId, setTemplateTypeId] = useState(template?.template_type_id ?? '');
   const [imageUrl, setImageUrl] = useState(template?.image_url ?? '');
   const [thumbnailUrl, setThumbnailUrl] = useState(template?.thumbnail_url ?? '');
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
   const [isPublic, setIsPublic] = useState(template?.is_public ?? true);
   const [fields, setFields] = useState<FormField[]>(template?.fields ?? []);
   const [positions, setPositions] = useState<Record<string, FieldPosition>>(template?.field_positions ?? {});
@@ -290,6 +292,8 @@ export const AdminTemplateEditor: React.FC<Props> = ({ template, onBack }) => {
       fields,
       field_positions: positions,
       is_public: isPublic,
+      imageFile: imageFile ?? undefined,
+      thumbnailFile: thumbnailFile ?? undefined,
     });
   };
 
@@ -358,13 +362,34 @@ export const AdminTemplateEditor: React.FC<Props> = ({ template, onBack }) => {
             </Form.Group>
 
             <Form.Group controlId="tpl-img" className="mb-3">
-              <Form.Label>Image URL</Form.Label>
-              <Form.Control size="sm" type="url" value={imageUrl} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setImageUrl(e.target.value)} placeholder="https://…" />
+              <Form.Label>Image</Form.Label>
+              <Form.Control
+                size="sm"
+                type="file"
+                accept="image/*"
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  const file = e.target.files?.[0] ?? null;
+                  setImageFile(file);
+                  if (file) setImageUrl(URL.createObjectURL(file));
+                }}
+              />
+              {imageUrl && (
+                <img src={imageUrl} alt="preview" className="mt-2 rounded" style={{ maxWidth: '100%', maxHeight: 80, objectFit: 'contain' }} />
+              )}
             </Form.Group>
 
             <Form.Group controlId="tpl-thumb" className="mb-3">
-              <Form.Label>Thumbnail URL <small className="text-muted">(optional)</small></Form.Label>
-              <Form.Control size="sm" type="url" value={thumbnailUrl} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setThumbnailUrl(e.target.value)} placeholder="Defaults to image URL" />
+              <Form.Label>Thumbnail <small className="text-muted">(optional)</small></Form.Label>
+              <Form.Control
+                size="sm"
+                type="file"
+                accept="image/*"
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  const file = e.target.files?.[0] ?? null;
+                  setThumbnailFile(file);
+                  if (file) setThumbnailUrl(URL.createObjectURL(file));
+                }}
+              />
             </Form.Group>
 
             <Form.Switch

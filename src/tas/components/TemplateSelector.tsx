@@ -12,37 +12,24 @@ import {
   Badge,
   Card,
 } from '@openedx/paragon';
-import { blockTemplatesApi, templatesApi } from '../services/api';
+import { templatesApi } from '../services/api';
 import { useTasStore } from '../store/tasStore';
 import type { Template } from '../types';
 
 export const TemplateSelector: React.FC = () => {
-  const { mfeContext, setSelectedTemplate, submission } = useTasStore();
+  const { setSelectedTemplate, submission } = useTasStore();
 
-  const usageKey = mfeContext?.usageKey || 'demo-block';
-
-  // Fetch templates assigned to this block
-  const { data: blockData, isLoading, error } = useQuery({
-    queryKey: ['block-templates', usageKey],
-    queryFn: () => blockTemplatesApi.list(usageKey),
+  // Fetch all active public templates from the real backend
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['templates', 'active'],
+    queryFn: () => templatesApi.list({ is_public: true }),
   });
 
-  // For each template block item we need the full template (fields + positions)
-  const templateIds = blockData?.templates.map((tb) => tb.template.id) ?? [];
-  const { data: fullTemplates, isLoading: loadingFull } = useQuery({
-    queryKey: ['templates-full', templateIds],
-    queryFn: async () => {
-      const results = await Promise.all(templateIds.map((id) => templatesApi.get(id)));
-      return results;
-    },
-    enabled: templateIds.length > 0,
-  });
-
-  const handleSelect = (template: Template, templateBlockId: string) => {
-    setSelectedTemplate(template, templateBlockId);
+  const handleSelect = (template: Template) => {
+    setSelectedTemplate(template, `tb-${template.id}`);
   };
 
-  if (isLoading || loadingFull) {
+  if (isLoading) {
     return (
       <div className="d-flex align-items-center justify-content-center" style={{ minHeight: '16rem' }}>
         <Spinner animation="border" variant="primary" screenReaderText="Loading templates" />
@@ -63,8 +50,7 @@ export const TemplateSelector: React.FC = () => {
     );
   }
 
-  const templates = fullTemplates ?? [];
-  const blockItems = blockData?.templates ?? [];
+  const templates = data?.results ?? [];
 
   if (templates.length === 0) {
     return (
@@ -92,13 +78,11 @@ export const TemplateSelector: React.FC = () => {
       </div>
 
       <div className="row">
-        {templates.map((template) => {
-          const blockItem = blockItems.find((bi) => bi.template.id === template.id);
-          return (
+        {templates.map((template) => (
             <div key={template.id} className="col-12 col-sm-6 col-lg-4 mb-4">
               <Card
                 isClickable
-                onClick={() => handleSelect(template, blockItem?.template_block_id ?? '')}
+                onClick={() => handleSelect(template)}
                 className="h-100"
               >
                 <Card.ImageCap
@@ -157,8 +141,7 @@ export const TemplateSelector: React.FC = () => {
                 </Card.Section>
               </Card>
             </div>
-          );
-        })}
+        ))}
       </div>
     </div>
   );

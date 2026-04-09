@@ -10,7 +10,7 @@ export interface TemplateType {
   name: string;
   slug: string;
   description: string;
-  icon: string;
+  icon?: string;
   is_active: boolean;
 }
 
@@ -155,6 +155,8 @@ export interface TemplateCreateBody {
   fields: FormField[];
   field_positions: Record<string, FieldPosition>;
   is_public: boolean;
+  imageFile?: File;
+  thumbnailFile?: File;
 }
 
 export type TemplateUpdateBody = Partial<TemplateCreateBody>;
