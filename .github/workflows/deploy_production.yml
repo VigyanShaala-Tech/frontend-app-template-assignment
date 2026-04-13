@@ -1,0 +1,42 @@
+name: Deploy TAS MFE to VigyanShaala UAT EC2
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+    types:
+      - closed
+
+jobs:
+  deploy:
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
+    runs-on: ubuntu-latest
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: true
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up SSH
+      uses: webfactory/ssh-agent@v0.9.0
+      with:
+        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+    - name: Add EC2 host key
+      run: |
+        mkdir -p ~/.ssh
+        ssh-keyscan -H "${{ secrets.EC2_IP_ADDRESS }}" >> ~/.ssh/known_hosts
+
+    - name: Deploying TAS MFE UAT EC2 Instance
+      run: |
+        ssh "${{ secrets.SSH_USERNAME }}@${{ secrets.EC2_IP_ADDRESS }}" "bash -se" << 'EOF'
+          set -euo pipefail
+          source ~/tutor-env/bin/activate
+          tutor images build mfe --no-cache
+          tutor local start -d
+        EOF
