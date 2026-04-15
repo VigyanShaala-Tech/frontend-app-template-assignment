@@ -246,10 +246,11 @@ export const AdminTemplateEditor: React.FC<Props> = ({ template, onBack }) => {
   const imageNaturalW = template?.image_width || 794;
   const imageNaturalH = template?.image_height || 1123;
 
-  const { data: templateTypes = [] } = useQuery({
+  const { data: typesResult } = useQuery({
     queryKey: ['template-types'],
-    queryFn: () => templateTypesApi.list().then((r) => r.results),
+    queryFn: () => templateTypesApi.list(),
   });
+  const templateTypes = typesResult?.results ?? [];
 
   const saveMut = useMutation({
     mutationFn: (body: TemplateCreateBody) =>

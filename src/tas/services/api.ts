@@ -93,11 +93,13 @@ function mapSubmission(raw: any): Submission {
 export const templateTypesApi = {
   list: async (): Promise<{ count: number; results: TemplateType[] }> => {
     const { data } = await http().get(`${tasBase()}/template-types/`, {
-      params: { is_active: true, page_size: 24 },
+      params: { is_active: true, page_size: 100 },
     });
+    // Backend may return paginated { count, results } or a plain array
+    const raw: any[] = Array.isArray(data) ? data : (data.results ?? []);
     return {
-      count: data.count,
-      results: (data.results as any[]).map(mapTemplateType),
+      count: Array.isArray(data) ? data.length : (data.count ?? raw.length),
+      results: raw.map(mapTemplateType),
     };
   },
 
@@ -129,7 +131,8 @@ export const templatesApi = {
     if (params?.template_type) query.template_type = params.template_type;
     if (params?.is_public !== undefined) query.is_public = params.is_public;
     const { data } = await http().get(`${tasBase()}/templates/`, { params: query });
-    let results: Template[] = (data.results as any[]).map(mapTemplate);
+    const raw: any[] = Array.isArray(data) ? data : (data.results ?? []);
+    let results: Template[] = raw.map(mapTemplate);
     if (params?.active_only !== false) {
       results = results.filter((t) => t.is_active);
     }
