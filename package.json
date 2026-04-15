@@ -1,10 +1,10 @@
 {
-  "name": "@edx/frontend-template-application",
+  "name": "@vigyanshaala/frontend-app-tas",
   "version": "0.1.0",
-  "description": "Frontend application template",
+  "description": "Template Assignment System (TAS) MFE for OpenEdX / Tutor",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/openedx/frontend-template-application.git"
+    "url": "git+https://github.com/VigyanShaala-Tech/template-assignment-mfe.git"
   },
   "browserslist": [
     "extends @edx/browserslist-config"
@@ -16,7 +16,7 @@
     "lint": "npm run stylelint && fedx-scripts eslint --ext .js --ext .jsx --ext .ts --ext .tsx . && npm run types",
     "lint:fix": "npm run stylelint && fedx-scripts eslint --ext .js --ext .jsx --ext .ts --ext .tsx . --fix",
     "snapshot": "fedx-scripts jest --updateSnapshot",
-    "start": "fedx-scripts webpack-dev-server --progress",
+    "start": "fedx-scripts webpack-dev-server --config webpack.dev.config.js --progress",
     "start:with-theme": "paragon install-theme && npm start && npm install",
     "test": "fedx-scripts jest --coverage --passWithNoTests",
     "types": "tsc --noEmit"
@@ -48,13 +48,19 @@
     "@fortawesome/react-fontawesome": "0.2.6",
     "@openedx/paragon": "^23.14.9",
     "@tanstack/react-query": "^5.90.5",
+    "@use-gesture/react": "^10.3.1",
+    "axios": "^1.13.6",
     "classnames": "^2.5.1",
     "core-js": "3.47.0",
+    "framer-motion": "^12.35.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-hook-form": "^7.71.2",
     "react-router": "6.30.3",
     "react-router-dom": "6.30.3",
-    "regenerator-runtime": "0.14.1"
+    "react-zoom-pan-pinch": "^3.7.0",
+    "regenerator-runtime": "0.14.1",
+    "zustand": "^5.0.11"
   },
   "devDependencies": {
     "@edx/browserslist-config": "^1.1.1",
