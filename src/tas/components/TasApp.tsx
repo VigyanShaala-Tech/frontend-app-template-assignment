@@ -6,23 +6,18 @@
  *   2. Student sees TemplateSelector (templates assigned to this block)
  *   3. Student picks a template → createOrGetDraft is called
  *   4. TemplateCanvas renders with field overlays; FieldEditorPopup opens on tap
- *   5. Auto-save fires 2s after any formData change (PATCH /submissions/{id}/)
- *   6. Student hits Submit → POST /submissions/{id}/submit/ → PdfPoller starts
+ *   5. Student hits "Save Draft" to persist progress, or "Submit" to finalise
  */
 
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useCallback, useRef } from 'react';
 import { Button, Badge } from '@openedx/paragon';
 import { ArrowBack } from '@openedx/paragon/icons';
 import { TemplateSelector } from './TemplateSelector';
 import { TemplateCanvas } from './TemplateCanvas';
 import { FieldEditorPopup } from './FieldEditorPopup';
-import { AutoSaveStatus } from './AutoSaveStatus';
 import { PdfPoller } from './PdfPoller';
-import { AdminApp } from './admin/AdminApp';
 import { useTasStore } from '../store/tasStore';
 import { submissionsApi } from '../services/api';
-
-const AUTO_SAVE_DEBOUNCE_MS = 2000;
 
 export const TasApp: React.FC = () => {
   const {
@@ -39,8 +34,10 @@ export const TasApp: React.FC = () => {
     getSelectedField,
     isSaving,
     setIsSaving,
-    setLastSavedAt,
   } = useTasStore();
+
+  // Track whether createOrGetDraft has already been called for this selection
+  const draftCreating = useRef(false);
 
   // ── Responsive detection ───────────────────────────────────────────────────
   useEffect(() => {
@@ -53,7 +50,10 @@ export const TasApp: React.FC = () => {
   // ── Create or retrieve draft when template is selected ────────────────────
   useEffect(() => {
     if (!selectedTemplate || !selectedTemplateBlockId || !mfeContext) return;
-    if (submission) return; // already have one
+    if (submission) return;
+    if (draftCreating.current) return;
+
+    draftCreating.current = true;
 
     submissionsApi
       .createOrGetDraft({
@@ -65,48 +65,79 @@ export const TasApp: React.FC = () => {
       })
       .then((sub) => {
         setSubmission(sub);
-        // Load existing form data if draft
         if (sub.status === 'draft' && Object.keys(sub.form_data).length > 0) {
           useTasStore.getState().setFormData(sub.form_data);
         }
       })
-      .catch(console.error);
-  }, [selectedTemplate, selectedTemplateBlockId, mfeContext, submission, setSubmission]);
+      .catch((err: any) => {
+        draftCreating.current = false;
+        const status = err?.response?.status;
+        const responseData = err?.response?.data;
 
-  // ── Auto-save debounce ─────────────────────────────────────────────────────
-  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const prevFormData = useRef<Record<string, string>>({});
+        // 409 means already submitted — show read-only state silently
+        if (status === 409) {
+          setSubmission({
+            id: '',
+            template_block_id: selectedTemplateBlockId ?? '',
+            student_id: mfeContext?.studentId ?? '',
+            course_id: mfeContext?.courseId ?? '',
+            usage_key: mfeContext?.usageKey ?? '',
+            form_data: {},
+            status: 'submitted',
+            version_number: 1,
+            submitted_at: null,
+            pdf_url: '',
+            created_at: '',
+            updated_at: '',
+          });
+          return;
+        }
 
+        let msg = 'Failed to start assignment. Please reload and try again.';
+        if (responseData?.detail) msg = responseData.detail;
+        else if (responseData?.non_field_errors) {
+          msg = Array.isArray(responseData.non_field_errors)
+            ? responseData.non_field_errors.join('\n')
+            : responseData.non_field_errors;
+        } else if (typeof responseData === 'string') {
+          msg = responseData;
+        } else if (responseData) {
+          const fieldErrors = Object.entries(responseData)
+            .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`)
+            .join('\n');
+          if (fieldErrors) msg = fieldErrors;
+        }
+        alert(msg);
+        clearSelection();
+      });
+  }, [selectedTemplate, selectedTemplateBlockId, mfeContext, submission, setSubmission, clearSelection]);
+
+  // Reset draft-creating guard when selection is cleared
   useEffect(() => {
+    if (!selectedTemplate) {
+      draftCreating.current = false;
+    }
+  }, [selectedTemplate]);
+
+  // ── Save draft handler ─────────────────────────────────────────────────────
+  const handleSaveDraft = useCallback(async () => {
     if (!submission || submission.status === 'submitted') return;
-    // Only trigger if formData actually changed
-    if (JSON.stringify(formData) === JSON.stringify(prevFormData.current)) return;
-    prevFormData.current = formData;
-
-    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
-    autoSaveTimer.current = setTimeout(async () => {
-      try {
-        setIsSaving(true);
-        const updated = await submissionsApi.patch(submission.id, formData);
-        setSubmission(updated);
-        setLastSavedAt(updated.updated_at);
-      } catch (err) {
-        console.error('Auto-save failed', err);
-      } finally {
-        setIsSaving(false);
-      }
-    }, AUTO_SAVE_DEBOUNCE_MS);
-
-    return () => {
-      if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
-    };
-  }, [formData, submission, setIsSaving, setLastSavedAt, setSubmission]);
+    try {
+      setIsSaving(true);
+      const updated = await submissionsApi.patch(submission.id, formData);
+      setSubmission(updated);
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail || 'Failed to save draft.';
+      alert(msg);
+    } finally {
+      setIsSaving(false);
+    }
+  }, [submission, formData, setIsSaving, setSubmission]);
 
   // ── Submit handler ─────────────────────────────────────────────────────────
   const handleSubmit = useCallback(async () => {
     if (!submission || submission.status === 'submitted') return;
 
-    // Validate required fields
     const missing =
       selectedTemplate?.fields
         .filter((f) => f.required && !(formData[f.id] ?? '').trim())
@@ -121,23 +152,36 @@ export const TasApp: React.FC = () => {
 
     try {
       setIsSaving(true);
-      // Final save first
+      // Save latest form data first, then submit
       await submissionsApi.patch(submission.id, formData);
       const submitted = await submissionsApi.submit(submission.id);
       setSubmission(submitted);
     } catch (err: any) {
-      alert(err?.message || 'Submission failed. Please try again.');
+      const responseData = err?.response?.data;
+      let errorMsg = 'Submission failed. Please try again.';
+      if (responseData) {
+        if (typeof responseData === 'string') {
+          errorMsg = responseData;
+        } else if (responseData.detail) {
+          errorMsg = responseData.detail;
+        } else if (responseData.non_field_errors) {
+          errorMsg = Array.isArray(responseData.non_field_errors)
+            ? responseData.non_field_errors.join('\n')
+            : responseData.non_field_errors;
+        } else {
+          const fieldErrors = Object.entries(responseData)
+            .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`)
+            .join('\n');
+          if (fieldErrors) errorMsg = fieldErrors;
+        }
+      }
+      alert(errorMsg);
     } finally {
       setIsSaving(false);
     }
   }, [submission, selectedTemplate, formData, setIsSaving, setSubmission]);
 
   const isSubmitted = submission?.status === 'submitted';
-
-  // ─── Render: admin/staff → admin view ─────────────────────────────────────
-  if (mfeContext?.isStaff || mfeContext?.isInstructor) {
-    return <AdminApp />;
-  }
 
   // ─── Render: no template selected → selector ──────────────────────────────
   if (!selectedTemplate) {
@@ -162,7 +206,7 @@ export const TasApp: React.FC = () => {
             size="sm"
             iconBefore={ArrowBack}
             onClick={() => {
-              if (window.confirm('Go back? Unsaved changes will be discarded.')) {
+              if (window.confirm('Go back? Unsaved changes will be lost.')) {
                 clearSelection();
               }
             }}
@@ -177,9 +221,6 @@ export const TasApp: React.FC = () => {
           {selectedTemplate.name}
         </h2>
 
-        {/* Auto-save status */}
-        <AutoSaveStatus />
-
         {/* Preview toggle */}
         {!isSubmitted && (
           <Button
@@ -192,13 +233,26 @@ export const TasApp: React.FC = () => {
           </Button>
         )}
 
+        {/* Save Draft */}
+        {!isSubmitted && (
+          <Button
+            variant="outline-brand"
+            size="sm"
+            onClick={handleSaveDraft}
+            disabled={isSaving || !submission}
+            className="ml-2"
+          >
+            {isSaving ? 'Saving…' : 'Save Draft'}
+          </Button>
+        )}
+
         {/* Submit */}
         {!isSubmitted && (
           <Button
             variant="brand"
             size="sm"
             onClick={handleSubmit}
-            disabled={isSaving}
+            disabled={isSaving || !submission}
             className="ml-2"
           >
             Submit

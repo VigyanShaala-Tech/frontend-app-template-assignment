@@ -1,9 +1,11 @@
 /**
- * AdminApp — root view shown to staff/instructors (isStaff || isInstructor).
+ * AdminApp — template management for staff.
+ * Mounted at /admin/templates
  *
  * Views:
  *  list   → AdminTemplateList (create / edit / delete / toggle)
  *  editor → AdminTemplateEditor (create or edit a template)
+ *  types  → AdminTemplateTypeManager
  */
 
 import React, { useState } from 'react';
@@ -36,12 +38,10 @@ export const AdminApp: React.FC = () => {
   }
 
   return (
-    <div className="h-full overflow-hidden">
-      <AdminTemplateList
-        onCreate={() => setView({ mode: 'editor', template: null })}
-        onEdit={(t) => setView({ mode: 'editor', template: t })}
-        onManageTypes={() => setView({ mode: 'types' })}
-      />
-    </div>
+    <AdminTemplateList
+      onCreate={() => setView({ mode: 'editor', template: null })}
+      onEdit={(t) => setView({ mode: 'editor', template: t })}
+      onManageTypes={() => setView({ mode: 'types' })}
+    />
   );
 };

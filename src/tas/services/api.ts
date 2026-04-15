@@ -1,13 +1,8 @@
 /**
- * TAS API client
- *
- * Calls the real Django backend for template-types and templates.
- * Submissions, block-templates, and PDF endpoints are not yet implemented
- * on the backend — those remain mocked until the backend ships them.
+ * TAS API client — all endpoints wired to the real Django backend.
  *
  * Base URL: {LMS_BASE_URL}/tas/api/v1/
- * Auth:     getAuthenticatedHttpClient() from @edx/frontend-platform/auth
- *           (automatically attaches the OpenEdX JWT bearer token)
+ * Auth:     getAuthenticatedHttpClient() — attaches OpenEdX JWT automatically.
  */
 
 import { getAuthenticatedHttpClient } from '@edx/frontend-platform/auth';
@@ -23,13 +18,6 @@ import type {
   TemplateCreateBody,
   TemplateUpdateBody,
 } from '../types';
-import {
-  MOCK_BLOCK_TEMPLATES,
-  submissionStore,
-  versionStore,
-  makeSubmissionId,
-  nextVersion,
-} from './mockData';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -42,10 +30,17 @@ function http() {
   return getAuthenticatedHttpClient();
 }
 
-/**
- * Map a raw backend Template object (uses `image`, `thumbnail`, integer id/template_type)
- * to the frontend Template shape (uses `image_url`, `thumbnail_url`, string ids).
- */
+function mapTemplateType(raw: any): TemplateType {
+  return {
+    id: String(raw.id),
+    name: raw.name,
+    slug: raw.slug,
+    description: raw.description ?? '',
+    icon: raw.icon ?? '',
+    is_active: raw.is_active,
+  };
+}
+
 function mapTemplate(raw: any): Template {
   return {
     id: String(raw.id),
@@ -76,14 +71,20 @@ function mapTemplate(raw: any): Template {
   };
 }
 
-function mapTemplateType(raw: any): TemplateType {
+function mapSubmission(raw: any): Submission {
   return {
     id: String(raw.id),
-    name: raw.name,
-    slug: raw.slug,
-    description: raw.description ?? '',
-    icon: raw.icon ?? '',
-    is_active: raw.is_active,
+    template_block_id: String(raw.template_block_id ?? ''),
+    student_id: raw.student_id ?? '',
+    course_id: raw.course_id ?? '',
+    usage_key: String(raw.usage_key ?? ''),
+    form_data: raw.form_data ?? {},
+    status: raw.status as SubmissionStatus,
+    version_number: raw.version_number ?? 1,
+    submitted_at: raw.submitted_at ?? null,
+    pdf_url: raw.pdf_url ?? '',
+    created_at: raw.created_at ?? '',
+    updated_at: raw.updated_at ?? '',
   };
 }
 
@@ -122,13 +123,11 @@ export const templatesApi = {
     template_type?: string;
     is_public?: boolean;
     search?: string;
-    /** Admin: pass false to include inactive templates */
     active_only?: boolean;
   }): Promise<{ count: number; results: Template[] }> => {
     const query: Record<string, any> = { page_size: 24 };
     if (params?.template_type) query.template_type = params.template_type;
     if (params?.is_public !== undefined) query.is_public = params.is_public;
-    // Backend doesn't have an active_only param — filter client-side when needed
     const { data } = await http().get(`${tasBase()}/templates/`, { params: query });
     let results: Template[] = (data.results as any[]).map(mapTemplate);
     if (params?.active_only !== false) {
@@ -152,14 +151,6 @@ export const templatesApi = {
 // ─── Admin: Templates CRUD ────────────────────────────────────────────────────
 
 export const adminTemplatesApi = {
-  /**
-   * POST /tas/api/v1/templates/
-   * Backend expects: template_type (int), name, description, image (file),
-   * image_width, image_height, thumbnail (file), fields (JSON), field_positions (JSON),
-   * is_public, is_active.
-   *
-   * We send JSON for now (image upload via URL is set on image_url field separately).
-   */
   create: async (body: TemplateCreateBody): Promise<Template> => {
     const fd = new FormData();
     fd.append('template_type', String(Number(body.template_type_id)));
@@ -197,10 +188,6 @@ export const adminTemplatesApi = {
     await http().delete(`${tasBase()}/templates/${id}/`);
   },
 
-  /**
-   * Backend soft-deletes via DELETE (sets is_active=false).
-   * To toggle active back on, use PATCH with is_active=true.
-   */
   toggleActive: async (id: string, currentlyActive: boolean): Promise<Template> => {
     const { data } = await http().patch(`${tasBase()}/templates/${id}/`, {
       is_active: !currentlyActive,
@@ -210,59 +197,23 @@ export const adminTemplatesApi = {
 };
 
 // ─── Block ↔ Template Assignments ─────────────────────────────────────────────
-// NOTE: Not yet implemented on the backend. Uses mock data.
 
 export const blockTemplatesApi = {
   list: async (usageKey: string): Promise<BlockTemplatesResponse> => {
-    const assigned = MOCK_BLOCK_TEMPLATES[usageKey];
-    if (assigned) return assigned;
-
-    // Fallback: return all active public templates for this block
-    const { results } = await templatesApi.list({ is_public: true });
+    const { data } = await http().get(`${tasBase()}/blocks/${encodeURIComponent(usageKey)}/templates/`);
+    // Backend returns a single TemplateBlock item — wrap in array for frontend shape
+    const item = data.templates;
     return {
-      usage_key: usageKey,
-      course_id: 'course-v1:Demo+DemoX+Demo_Course',
-      templates: results.map((t, i) => ({
-        template_block_id: `tb-${t.id}`,
-        sort_order: i,
-        template: {
-          id: t.id,
-          name: t.name,
-          template_type: {
-            slug: t.template_type?.slug || 'unknown',
-            name: t.template_type?.name || 'Unknown',
-          },
-          thumbnail_url: t.thumbnail_url,
-          image_width: t.image_width,
-          image_height: t.image_height,
-        },
-      })),
+      usage_key: data.usage_key,
+      course_id: data.course_id,
+      templates: Array.isArray(item) ? item : [item],
     };
   },
 };
 
-// ─── Submissions ──────────────────────────────────────────────────────────────
-// NOTE: Not yet implemented on the backend. Uses in-memory mock store.
-
-const MOCK_DELAY = 400;
-const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
+// ─── Student Submissions ──────────────────────────────────────────────────────
 
 export const submissionsApi = {
-  list: async (params?: {
-    usage_key?: string;
-    course_id?: string;
-    status?: SubmissionStatus;
-    student_id?: string;
-  }): Promise<Submission[]> => {
-    await delay(MOCK_DELAY);
-    let results = Object.values(submissionStore);
-    if (params?.usage_key) results = results.filter((s) => s.usage_key === params.usage_key);
-    if (params?.course_id) results = results.filter((s) => s.course_id === params.course_id);
-    if (params?.status) results = results.filter((s) => s.status === params.status);
-    if (params?.student_id) results = results.filter((s) => s.student_id === params.student_id);
-    return results;
-  },
-
   createOrGetDraft: async (body: {
     template_block_id: string;
     form_data: Record<string, string>;
@@ -270,107 +221,77 @@ export const submissionsApi = {
     course_id: string;
     student_id: string;
   }): Promise<Submission> => {
-    await delay(MOCK_DELAY);
-    const existing = Object.values(submissionStore).find(
-      (s) => s.template_block_id === body.template_block_id && s.student_id === body.student_id,
-    );
-    if (existing) return existing;
-
-    const id = makeSubmissionId();
-    const now = new Date().toISOString();
-    const sub: Submission = {
-      id,
-      template_block_id: body.template_block_id,
-      student_id: body.student_id,
-      course_id: body.course_id,
+    const payload = {
+      template_block_id: Number(body.template_block_id),
+      course_key: body.course_id,
       usage_key: body.usage_key,
       form_data: body.form_data,
       status: 'draft',
-      version_number: 1,
-      submitted_at: null,
-      pdf_url: '',
-      created_at: now,
-      updated_at: now,
     };
-    submissionStore[id] = sub;
-    versionStore[id] = [{ version_number: 1, form_data: body.form_data, saved_at: now }];
-    return sub;
+    const { data } = await http().post(`${tasBase()}/student-submission/`, payload);
+    return mapSubmission(data);
   },
 
   get: async (id: string): Promise<Submission> => {
-    await delay(MOCK_DELAY);
-    const sub = submissionStore[id];
-    if (!sub) throw new Error(`Submission ${id} not found`);
-    return sub;
+    const { data } = await http().get(`${tasBase()}/student-submission/${id}/`);
+    return mapSubmission(data);
   },
 
   patch: async (id: string, form_data: Record<string, string>): Promise<Submission> => {
-    await delay(MOCK_DELAY);
-    const sub = submissionStore[id];
-    if (!sub) throw new Error(`Submission ${id} not found`);
-    if (sub.status === 'submitted') throw new Error('Cannot edit a submitted assignment');
-
-    const version = nextVersion(id);
-    const now = new Date().toISOString();
-    const updated: Submission = { ...sub, form_data, version_number: version, updated_at: now };
-    submissionStore[id] = updated;
-    if (!versionStore[id]) versionStore[id] = [];
-    versionStore[id].push({ version_number: version, form_data, saved_at: now });
-    return updated;
+    const { data } = await http().patch(`${tasBase()}/student-submission/${id}/`, { form_data });
+    return mapSubmission(data);
   },
 
   submit: async (id: string): Promise<Submission> => {
-    await delay(MOCK_DELAY);
-    const sub = submissionStore[id];
-    if (!sub) throw new Error(`Submission ${id} not found`);
-    if (sub.status === 'submitted') throw new Error('Already submitted');
-
-    const now = new Date().toISOString();
-    const updated: Submission = { ...sub, status: 'submitted', submitted_at: now, updated_at: now, pdf_url: '' };
-    submissionStore[id] = updated;
-    setTimeout(() => {
-      submissionStore[id] = {
-        ...submissionStore[id],
-        pdf_url: `https://mock-s3.example.com/submissions/${id}.pdf`,
-      };
-    }, 3000);
-    return updated;
+    const { data } = await http().post(`${tasBase()}/student-submission/${id}/submit/`);
+    return mapSubmission(data);
   },
 
   getPdf: async (id: string): Promise<PdfStatusResponse> => {
-    await delay(MOCK_DELAY);
-    const sub = submissionStore[id];
-    if (!sub) throw new Error(`Submission ${id} not found`);
-    if (sub.pdf_url) return { pdf_url: sub.pdf_url };
-    return { pdf_url: null, status: 'generating' };
+    const { data } = await http().get(`${tasBase()}/student-submission/${id}/pdf/`);
+    return { pdf_url: data.pdf_url ?? null, status: data.status };
   },
 
   getVersions: async (id: string): Promise<SubmissionVersionsResponse> => {
-    await delay(MOCK_DELAY);
-    const versions = versionStore[id] || [];
+    const { data } = await http().get(`${tasBase()}/student-submission/${id}/versions/`);
     return {
-      submission_id: id,
-      versions: [...versions].sort((a, b) => b.version_number - a.version_number),
+      submission_id: String(data.submission_id),
+      versions: data.versions ?? [],
     };
   },
 };
 
-// ─── Admin: Submissions read ──────────────────────────────────────────────────
-// NOTE: Not yet implemented on the backend. Uses in-memory mock store.
+// ─── Admin: Submissions ───────────────────────────────────────────────────────
 
 export const adminSubmissionsApi = {
   list: async (params?: {
-    course_id?: string;
     usage_key?: string;
     status?: SubmissionStatus;
-  }): Promise<Submission[]> => {
-    await delay(MOCK_DELAY);
-    let results = Object.values(submissionStore);
-    if (params?.course_id) results = results.filter((s) => s.course_id === params.course_id);
-    if (params?.usage_key) results = results.filter((s) => s.usage_key === params.usage_key);
-    if (params?.status) results = results.filter((s) => s.status === params.status);
-    return results.sort(
-      (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
+  }): Promise<any[]> => {
+    const usageKey = params?.usage_key ?? '';
+    const { data } = await http().get(
+      `${tasBase()}/block/${encodeURIComponent(usageKey)}/submissions/`,
+      { params: { page_size: 24, ...(params?.status ? { status: params.status } : {}) } },
     );
+    return data.results ?? data;
+  },
+
+  get: async (id: string): Promise<any> => {
+    const { data } = await http().get(`${tasBase()}/submissions/${id}/`);
+    return data;
+  },
+
+  getRubrics: async (usageKey: string): Promise<any> => {
+    const { data } = await http().get(
+      `${tasBase()}/block/${encodeURIComponent(usageKey)}/rubrics/`,
+    );
+    return data;
+  },
+
+  submitFeedback: async (
+    submissionId: string,
+    payload: { rubrics?: any[]; comment?: string; status?: string },
+  ): Promise<void> => {
+    await http().post(`${tasBase()}/submissions/${submissionId}/feedback/`, payload);
   },
 };
