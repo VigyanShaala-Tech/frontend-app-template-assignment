@@ -10,8 +10,7 @@
  */
 
 import React, { useEffect, useCallback, useRef } from 'react';
-import { Button, Badge } from '@openedx/paragon';
-import { ArrowBack } from '@openedx/paragon/icons';
+
 import { TemplateSelector } from './TemplateSelector';
 import { TemplateCanvas } from './TemplateCanvas';
 import { FieldEditorPopup } from './FieldEditorPopup';
@@ -195,80 +194,145 @@ export const TasApp: React.FC = () => {
   // ─── Render: template selected → canvas ───────────────────────────────────
   const selectedField = getSelectedField();
 
+  const btnBase: React.CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    padding: '6px 14px',
+    borderRadius: 8,
+    fontSize: 13,
+    fontWeight: 600,
+    cursor: 'pointer',
+    border: 'none',
+    transition: 'opacity 0.15s',
+    whiteSpace: 'nowrap',
+  };
+
   return (
     <div className="d-flex flex-column h-100">
       {/* Toolbar */}
-      <div className="d-flex align-items-center px-3 py-2 bg-white border-bottom shadow-sm flex-shrink-0">
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        padding: '8px 16px',
+        background: '#fff',
+        borderBottom: '1px solid #e5e7eb',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+        flexShrink: 0,
+        gap: 8,
+        minHeight: 52,
+      }}>
         {/* Back */}
         {!isSubmitted && (
-          <Button
-            variant="tertiary"
-            size="sm"
-            iconBefore={ArrowBack}
+          <button
+            type="button"
             onClick={() => {
               if (window.confirm('Go back? Unsaved changes will be lost.')) {
                 clearSelection();
               }
             }}
-            className="mr-1"
+            style={{ ...btnBase, background: '#f3f4f6', color: '#374151' }}
           >
-            <span className="d-none d-sm-inline">Back</span>
-          </Button>
+            ← Back
+          </button>
         )}
 
         {/* Template name */}
-        <h2 className="font-weight-bold small flex-grow-1 mb-0 text-truncate mx-2">
+        <span style={{
+          flex: 1,
+          fontWeight: 700,
+          fontSize: 14,
+          color: '#111827',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          margin: '0 4px',
+        }}>
           {selectedTemplate.name}
-        </h2>
+        </span>
 
         {/* Preview toggle */}
         {!isSubmitted && (
-          <Button
-            variant="outline-primary"
-            size="sm"
+          <button
+            type="button"
             onClick={() => setPreviewMode(!isPreviewMode)}
-            className="ml-2"
+            style={{ ...btnBase, background: '#f3f4f6', color: '#374151' }}
           >
             {isPreviewMode ? 'Edit' : 'Preview'}
-          </Button>
+          </button>
         )}
 
         {/* Save Draft */}
         {!isSubmitted && (
-          <Button
-            variant="outline-brand"
-            size="sm"
+          <button
+            type="button"
             onClick={handleSaveDraft}
             disabled={isSaving || !submission}
-            className="ml-2"
+            style={{
+              ...btnBase,
+              background: '#fff',
+              color: '#2563eb',
+              border: '1.5px solid #2563eb',
+              opacity: (isSaving || !submission) ? 0.5 : 1,
+            }}
           >
             {isSaving ? 'Saving…' : 'Save Draft'}
-          </Button>
+          </button>
         )}
 
         {/* Submit */}
         {!isSubmitted && (
-          <Button
-            variant="brand"
-            size="sm"
+          <button
+            type="button"
             onClick={handleSubmit}
             disabled={isSaving || !submission}
-            className="ml-2"
+            style={{
+              ...btnBase,
+              background: '#2563eb',
+              color: '#fff',
+              opacity: (isSaving || !submission) ? 0.5 : 1,
+            }}
           >
             Submit
-          </Button>
+          </button>
         )}
 
         {isSubmitted && (
-          <Badge variant="success" className="ml-2 px-3 py-2">
-            &#10003; Submitted
-          </Badge>
+          <span style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            background: '#dcfce7',
+            color: '#15803d',
+            borderRadius: 8,
+            padding: '6px 14px',
+            fontWeight: 600,
+            fontSize: 13,
+          }}>
+            ✓ Submitted
+          </span>
         )}
       </div>
 
-      {/* Canvas area */}
-      <div className="flex-grow-1 overflow-hidden position-relative">
-        <TemplateCanvas template={selectedTemplate} readOnly={isSubmitted || isPreviewMode} />
+      {/* Outer page — scrollable grey background */}
+      <div style={{
+        flex: 1,
+        overflow: 'auto',
+        background: '#e5e7eb',
+        padding: '24px',
+      }}>
+        {/* Inner container — white card that holds the canvas */}
+        <div style={{
+          background: '#fff',
+          borderRadius: 12,
+          boxShadow: '0 2px 12px rgba(0,0,0,0.1)',
+          padding: 16,
+          maxWidth: 900,
+          margin: '0 auto',
+        }}>
+          <TemplateCanvas template={selectedTemplate} readOnly={isSubmitted || isPreviewMode} />
+        </div>
       </div>
 
       {/* Field editor popup */}

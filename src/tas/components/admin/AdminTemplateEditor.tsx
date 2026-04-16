@@ -113,60 +113,79 @@ interface DraggableOverlayProps {
   fieldIndex: number;
   position: FieldPosition;
   isSelected: boolean;
-  canvasW: number;
-  canvasH: number;
+  canvasRef: React.RefObject<HTMLDivElement>;
   onSelect: () => void;
   onPositionChange: (pos: FieldPosition) => void;
 }
 
-const DraggableOverlay: React.FC<DraggableOverlayProps> = ({
-  field, fieldIndex, position, isSelected, canvasW, canvasH, onSelect, onPositionChange,
-}) => {
-  const dragRef = useRef<{ sx: number; sy: number; ox: number; oy: number } | null>(null);
-  const resizeRef = useRef<{ sx: number; sy: number; ow: number; oh: number } | null>(null);
+const BORDER_COLORS = ['#2563eb', '#16a34a', '#d97706', '#dc2626', '#0891b2', '#374151'];
 
-  const variantIdx = fieldIndex % BADGE_COLORS.length;
-  const BORDER_COLORS = ['#2563eb','#16a34a','#d97706','#dc2626','#0891b2','#374151'];
-  const LABEL_COLORS  = ['#2563eb','#16a34a','#d97706','#dc2626','#0891b2','#374151'];
-  const borderColor = BORDER_COLORS[variantIdx];
-  const labelColor  = LABEL_COLORS[variantIdx];
+const DraggableOverlay: React.FC<DraggableOverlayProps> = ({
+  field, fieldIndex, position, isSelected, canvasRef, onSelect, onPositionChange,
+}) => {
+  const dragRef = useRef<{ sx: number; sy: number; ox: number; oy: number; rw: number; rh: number } | null>(null);
+  const resizeRef = useRef<{ sx: number; sy: number; ow: number; oh: number; rw: number; rh: number } | null>(null);
+
+  const borderColor = BORDER_COLORS[fieldIndex % BORDER_COLORS.length];
+
+  // Get the canvas's actual rendered size (accounts for zoom/scale)
+  const getRenderedSize = () => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    return { rw: rect?.width ?? 794, rh: rect?.height ?? 1123 };
+  };
 
   const px = {
-    left:   (position.x      / 100) * canvasW,
-    top:    (position.y      / 100) * canvasH,
-    width:  (position.width  / 100) * canvasW,
-    height: (position.height / 100) * canvasH,
+    left:   `${position.x}%`,
+    top:    `${position.y}%`,
+    width:  `${position.width}%`,
+    height: `${position.height}%`,
   };
 
   const onMouseDown = (e: React.MouseEvent) => {
     e.stopPropagation();
+    e.preventDefault();
     onSelect();
-    dragRef.current = { sx: e.clientX, sy: e.clientY, ox: position.x, oy: position.y };
+    const { rw, rh } = getRenderedSize();
+    dragRef.current = { sx: e.clientX, sy: e.clientY, ox: position.x, oy: position.y, rw, rh };
+
     const onMove = (ev: MouseEvent) => {
       if (!dragRef.current) return;
+      const { sx, sy, ox, oy, rw: w, rh: h } = dragRef.current;
       onPositionChange({
         ...position,
-        x: Math.max(0, Math.min(100 - position.width,  dragRef.current.ox + ((ev.clientX - dragRef.current.sx) / canvasW) * 100)),
-        y: Math.max(0, Math.min(100 - position.height, dragRef.current.oy + ((ev.clientY - dragRef.current.sy) / canvasH) * 100)),
+        x: Math.max(0, Math.min(100 - position.width,  ox + ((ev.clientX - sx) / w) * 100)),
+        y: Math.max(0, Math.min(100 - position.height, oy + ((ev.clientY - sy) / h) * 100)),
       });
     };
-    const onUp = () => { dragRef.current = null; window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+    const onUp = () => {
+      dragRef.current = null;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
   };
 
   const onResizeDown = (e: React.MouseEvent) => {
     e.stopPropagation();
-    resizeRef.current = { sx: e.clientX, sy: e.clientY, ow: position.width, oh: position.height };
+    e.preventDefault();
+    const { rw, rh } = getRenderedSize();
+    resizeRef.current = { sx: e.clientX, sy: e.clientY, ow: position.width, oh: position.height, rw, rh };
+
     const onMove = (ev: MouseEvent) => {
       if (!resizeRef.current) return;
+      const { sx, sy, ow, oh, rw: w, rh: h } = resizeRef.current;
       onPositionChange({
         ...position,
-        width:  Math.max(5,  Math.min(100 - position.x, resizeRef.current.ow + ((ev.clientX - resizeRef.current.sx) / canvasW) * 100)),
-        height: Math.max(2, Math.min(100 - position.y, resizeRef.current.oh + ((ev.clientY - resizeRef.current.sy) / canvasH) * 100)),
+        width:  Math.max(3, Math.min(100 - position.x, ow + ((ev.clientX - sx) / w) * 100)),
+        height: Math.max(2, Math.min(100 - position.y, oh + ((ev.clientY - sy) / h) * 100)),
       });
     };
-    const onUp = () => { resizeRef.current = null; window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+    const onUp = () => {
+      resizeRef.current = null;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
   };
@@ -180,21 +199,22 @@ const DraggableOverlay: React.FC<DraggableOverlayProps> = ({
         border: `2px ${isSelected ? 'solid' : 'dashed'} ${borderColor}`,
         background: isSelected ? `${borderColor}18` : `${borderColor}08`,
         cursor: 'move', userSelect: 'none', borderRadius: 4,
+        boxSizing: 'border-box',
         boxShadow: isSelected ? `0 0 0 2px ${borderColor}40` : 'none',
       }}
     >
-      {/* Label badge above */}
+      {/* Label badge */}
       <div style={{
-        position: 'absolute', left: 0, top: -17,
-        background: labelColor, color: '#fff',
+        position: 'absolute', left: 0, top: -18,
+        background: borderColor, color: '#fff',
         fontSize: 9, fontWeight: 700,
         padding: '2px 6px', borderRadius: 3,
-        whiteSpace: 'nowrap',
+        whiteSpace: 'nowrap', pointerEvents: 'none',
       }}>
         {fieldIndex + 1}. {field.label || '(unnamed)'}{field.required ? ' *' : ''}
       </div>
 
-      {/* Center type hint */}
+      {/* Type hint */}
       <div style={{
         position: 'absolute', inset: 0,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -203,18 +223,18 @@ const DraggableOverlay: React.FC<DraggableOverlayProps> = ({
         {field.type}
       </div>
 
-      {/* Resize handle */}
-      {isSelected && (
-        <div
-          onMouseDown={onResizeDown}
-          style={{
-            position: 'absolute', bottom: 0, right: 0,
-            width: 12, height: 12,
-            background: borderColor, cursor: 'se-resize',
-            borderRadius: '3px 0 3px 0',
-          }}
-        />
-      )}
+      {/* Resize handle — always visible when selected */}
+      <div
+        onMouseDown={onResizeDown}
+        style={{
+          position: 'absolute', bottom: -1, right: -1,
+          width: 16, height: 16,
+          background: borderColor,
+          cursor: 'se-resize',
+          borderRadius: '3px 0 0 0',
+          opacity: isSelected ? 1 : 0.4,
+        }}
+      />
     </div>
   );
 };
@@ -496,8 +516,7 @@ export const AdminTemplateEditor: React.FC<Props> = ({ template, onBack }) => {
                           fieldIndex={i}
                           position={pos}
                           isSelected={selectedFieldId === f.id}
-                          canvasW={imageNaturalW}
-                          canvasH={imageNaturalH}
+                          canvasRef={canvasRef}
                           onSelect={() => setSelectedFieldId(f.id)}
                           onPositionChange={(p) => updatePosition(f.id, p)}
                         />

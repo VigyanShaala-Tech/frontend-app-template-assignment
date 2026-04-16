@@ -41,25 +41,26 @@ export const FieldEditorPopup: React.FC<Props> = ({ field }) => {
     }
   };
 
-  const renderInput = () => {
-    const base =
-      'w-full rounded-xl border border-gray-300 px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent';
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    borderRadius: 10,
+    border: '1.5px solid #d1d5db',
+    padding: '12px 14px',
+    fontSize: 15,
+    outline: 'none',
+    boxSizing: 'border-box',
+    fontFamily: 'inherit',
+    color: '#111827',
+    background: '#f9fafb',
+    transition: 'border-color 0.15s',
+  };
 
+  const renderInput = () => {
     switch (field.type) {
-      case 'textarea':
-        return (
-          <textarea
-            className={`${base} min-h-[120px] resize-y`}
-            placeholder={field.placeholder || `Enter ${field.label}`}
-            value={localValue}
-            onChange={(e) => setLocalValue(e.target.value)}
-            autoFocus
-          />
-        );
       case 'select':
         return (
           <select
-            className={base}
+            style={{ ...inputStyle, cursor: 'pointer' }}
             value={localValue}
             onChange={(e) => setLocalValue(e.target.value)}
           >
@@ -73,7 +74,7 @@ export const FieldEditorPopup: React.FC<Props> = ({ field }) => {
         return (
           <input
             type="date"
-            className={base}
+            style={inputStyle}
             value={localValue}
             onChange={(e) => setLocalValue(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -84,7 +85,7 @@ export const FieldEditorPopup: React.FC<Props> = ({ field }) => {
         return (
           <input
             type="number"
-            className={base}
+            style={inputStyle}
             placeholder={field.placeholder || `Enter ${field.label}`}
             value={localValue}
             onChange={(e) => setLocalValue(e.target.value)}
@@ -93,14 +94,13 @@ export const FieldEditorPopup: React.FC<Props> = ({ field }) => {
           />
         );
       default:
+        // text and textarea both get a large textarea
         return (
-          <input
-            type="text"
-            className={base}
+          <textarea
+            style={{ ...inputStyle, minHeight: 120, resize: 'vertical', lineHeight: 1.6 }}
             placeholder={field.placeholder || `Enter ${field.label}`}
             value={localValue}
             onChange={(e) => setLocalValue(e.target.value)}
-            onKeyDown={handleKeyDown}
             autoFocus
           />
         );
@@ -108,31 +108,40 @@ export const FieldEditorPopup: React.FC<Props> = ({ field }) => {
   };
 
   const content = (
-    <div className="p-6 space-y-4">
+    <div style={{ padding: '20px 24px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div>
-        <h3 className="text-lg font-semibold text-gray-900">
+        <h3 style={{ fontSize: 17, fontWeight: 700, color: '#111827', margin: 0 }}>
           {field.label}
-          {field.required && <span className="text-red-500 ml-1">*</span>}
+          {field.required && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
         </h3>
         {field.placeholder && (
-          <p className="text-sm text-gray-500 mt-0.5">{field.placeholder}</p>
+          <p style={{ fontSize: 13, color: '#6b7280', marginTop: 4, marginBottom: 0 }}>{field.placeholder}</p>
         )}
       </div>
 
       {renderInput()}
 
-      <div className="flex gap-3 pt-2">
+      <div style={{ display: 'flex', gap: 10, paddingTop: 8 }}>
         <button
           type="button"
           onClick={closeFieldEditor}
-          className="flex-1 py-3 rounded-xl border border-gray-300 text-gray-700 font-medium hover:bg-gray-50 transition"
+          style={{
+            flex: 1, padding: '10px 0', borderRadius: 10,
+            border: '1.5px solid #d1d5db', background: '#fff',
+            color: '#374151', fontWeight: 600, fontSize: 14, cursor: 'pointer',
+          }}
         >
           Cancel
         </button>
         <button
           type="button"
           onClick={handleSave}
-          className="flex-1 py-3 rounded-xl bg-blue-600 text-white font-medium hover:bg-blue-700 transition shadow-sm"
+          style={{
+            flex: 1, padding: '10px 0', borderRadius: 10,
+            border: 'none', background: '#2563eb',
+            color: '#fff', fontWeight: 600, fontSize: 14, cursor: 'pointer',
+            boxShadow: '0 1px 3px rgba(37,99,235,0.3)',
+          }}
         >
           Save
         </button>
@@ -146,22 +155,22 @@ export const FieldEditorPopup: React.FC<Props> = ({ field }) => {
         {isFieldEditorOpen && (
           <>
             <motion.div
-              className="fixed inset-0 bg-black/50 z-40"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+              style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 40 }}
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               onClick={closeFieldEditor}
             />
             <motion.div
-              className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl z-50 max-h-[85vh] overflow-y-auto"
-              initial={{ y: '100%' }}
-              animate={{ y: 0 }}
-              exit={{ y: '100%' }}
+              style={{
+                position: 'fixed', bottom: 0, left: 0, right: 0,
+                background: '#fff', borderRadius: '24px 24px 0 0',
+                boxShadow: '0 -4px 24px rgba(0,0,0,0.15)',
+                zIndex: 50, maxHeight: '85vh', overflowY: 'auto',
+              }}
+              initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
               transition={{ type: 'spring', damping: 30, stiffness: 300 }}
             >
-              {/* Drag handle */}
-              <div className="flex justify-center pt-3 pb-1">
-                <div className="w-10 h-1 bg-gray-300 rounded-full" />
+              <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 12, paddingBottom: 4 }}>
+                <div style={{ width: 40, height: 4, background: '#d1d5db', borderRadius: 99 }} />
               </div>
               {content}
             </motion.div>
@@ -177,14 +186,18 @@ export const FieldEditorPopup: React.FC<Props> = ({ field }) => {
       {isFieldEditorOpen && (
         <>
           <motion.div
-            className="fixed inset-0 bg-black/40 z-40"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 40 }}
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             onClick={closeFieldEditor}
           />
           <motion.div
-            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white rounded-2xl shadow-2xl z-50"
+            style={{
+              position: 'fixed', left: '50%', top: '50%',
+              transform: 'translate(-50%, -50%)',
+              width: '100%', maxWidth: 480,
+              background: '#fff', borderRadius: 16,
+              boxShadow: '0 8px 40px rgba(0,0,0,0.18)', zIndex: 50,
+            }}
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}

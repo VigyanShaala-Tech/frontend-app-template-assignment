@@ -13,10 +13,10 @@ interface FieldOverlayProps {
   field: FormField;
   position: FieldPosition;
   isSelected: boolean;
-  imageWidth: number;
-  imageHeight: number;
-  offsetX: number;
-  offsetY: number;
+  imageWidth?: number;
+  imageHeight?: number;
+  offsetX?: number;
+  offsetY?: number;
   actualImageWidth: number;
   actualImageHeight: number;
   isReadOnly?: boolean;
@@ -26,17 +26,12 @@ export const FieldOverlay: React.FC<FieldOverlayProps> = ({
   field,
   position,
   isSelected,
-  imageWidth,
-  imageHeight,
-  offsetX,
-  offsetY,
   actualImageWidth,
   actualImageHeight,
   isReadOnly = false,
 }) => {
   const { openFieldEditor, formData, isMobile, submission } = useTasStore();
 
-  const px = percentToPixels(position, imageWidth, imageHeight);
   const actualPx = percentToPixels(position, actualImageWidth, actualImageHeight);
   const fontSize = calculateFontSize(actualPx.height);
 
@@ -73,10 +68,10 @@ export const FieldOverlay: React.FC<FieldOverlayProps> = ({
       onClick={handleClick}
       style={{
         position: 'absolute',
-        left: px.x + offsetX,
-        top: px.y + offsetY,
-        width: px.width,
-        height: px.height,
+        left: `${position.x}%`,
+        top: `${position.y}%`,
+        width: `${position.width}%`,
+        height: `${position.height}%`,
         border: `2px ${borderStyle} ${borderColor}`,
         backgroundColor: bgColor,
         cursor: isInactive ? 'default' : 'pointer',
