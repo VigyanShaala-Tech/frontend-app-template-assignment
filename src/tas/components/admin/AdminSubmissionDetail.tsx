@@ -8,12 +8,13 @@
  */
 
 import React, { useState } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+
 import {
   Button, Badge, Spinner, Form, Card,
 } from '@openedx/paragon';
 import { ArrowBack, CheckCircle } from '@openedx/paragon/icons';
-import { adminSubmissionsApi, submissionsApi } from '../../services/api';
+import { adminSubmissionsApi } from '../../services/api';
 import { useTasStore } from '../../store/tasStore';
 
 interface Props {
@@ -36,10 +37,10 @@ const FEEDBACK_BADGE: Record<string, string> = {
 export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack }) => {
   const { mfeContext } = useTasStore();
   const usageKey = mfeContext?.usageKey ?? '';
+  const queryClient = useQueryClient();
 
   const [comment, setComment] = useState('');
   const [rubricScores, setRubricScores] = useState<Record<string, string>>({});
-  const [feedbackStatus, setFeedbackStatus] = useState<'approved' | 'rejected'>('approved');
   const [feedbackSaved, setFeedbackSaved] = useState(false);
 
   const { data: submission, isLoading: loadingSub } = useQuery({
@@ -53,20 +54,19 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
     enabled: !!usageKey,
   });
 
-  const { data: versionsData, isLoading: loadingVersions } = useQuery({
-    queryKey: ['submission-versions', submissionId],
-    queryFn: () => submissionsApi.getVersions(submissionId),
-    enabled: !!submissionId,
-  });
 
   const feedbackMut = useMutation({
-    mutationFn: () =>
+    mutationFn: (status: 'approved' | 'rejected') =>
       adminSubmissionsApi.submitFeedback(submissionId, {
         comment,
         rubrics: Object.entries(rubricScores).map(([criterion, score]) => ({ criterion, score })),
-        status: feedbackStatus,
+        status,
       }),
-    onSuccess: () => setFeedbackSaved(true),
+    onSuccess: () => {
+      setFeedbackSaved(true);
+      queryClient.invalidateQueries({ queryKey: ['admin-submission-detail', submissionId] });
+      queryClient.invalidateQueries({ queryKey: ['admin-submissions', usageKey] });
+    },
   });
 
   const isLoading = loadingSub || loadingRubrics;
@@ -90,7 +90,7 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
 
   const rubricList: any[] = rubrics?.rubrics ?? [];
   const formEntries = Object.entries(submission.form_data ?? {});
-  const versions = versionsData?.versions ?? [];
+  const versionHistory: any[] = submission.version_history ?? [];
   const isSubmitted = submission.status === 'submitted';
 
   return (
@@ -143,9 +143,31 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
               <Card className="shadow-sm">
                 <Card.Header title="PDF Submission" />
                 <Card.Section>
-                  <a href={submission.pdf} target="_blank" rel="noopener noreferrer">
-                    Download PDF
-                  </a>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const res = await fetch(submission.pdf, { credentials: 'include' });
+                        const blob = await res.blob();
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `submission_${submission.id}.pdf`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      } catch {
+                        window.open(submission.pdf, '_blank');
+                      }
+                    }}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 6,
+                      padding: '8px 16px', background: '#2563eb', color: '#fff',
+                      border: 'none', borderRadius: 8, fontWeight: 600,
+                      fontSize: 14, cursor: 'pointer',
+                    }}
+                  >
+                    ↓ Download PDF
+                  </button>
                 </Card.Section>
               </Card>
             )}
@@ -156,20 +178,30 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
             <Card className="shadow-sm">
               <Card.Header title={isSubmitted ? 'Instructor Feedback' : 'Previous Feedback'} />
               <Card.Section>
-                {/* Past feedback for rejected submissions */}
+                {/* Past feedback for non-submitted (rejected/approved) */}
                 {!isSubmitted && submission.feedback && (
-                  <div className="mb-2">
+                  <div>
                     <Badge variant={FEEDBACK_BADGE[submission.feedback.status] ?? 'secondary'} className="mb-2">
                       {submission.feedback.status}
                     </Badge>
-                    {submission.feedback.comment && (
+                    {submission.feedback.rubrics?.length > 0 && (
+                      <div className="mt-2 mb-2">
+                        {submission.feedback.rubrics.map((r: any, i: number) => (
+                          <div key={i} className="d-flex justify-content-between small py-1" style={{ borderBottom: '1px solid #e9ecef' }}>
+                            <span>{r.criterion}</span>
+                            <strong>{r.score}</strong>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {submission.feedback.comment ? (
                       <p className="small mt-2 mb-0" style={{ whiteSpace: 'pre-wrap' }}>
                         {submission.feedback.comment}
                       </p>
-                    )}
-                    {!submission.feedback.comment && (
+                    ) : (
                       <p className="text-muted small mb-0">No comment left.</p>
                     )}
+
                   </div>
                 )}
 
@@ -230,24 +262,23 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
 
                       {/* Approve / Reject buttons */}
                       <div className="d-flex" style={{ gap: '0.5rem' }}>
-                        <Button
-                          variant="brand"
-                          onClick={() => { setFeedbackStatus('approved'); feedbackMut.mutate(); }}
-                          disabled={feedbackMut.isPending}
-                        >
-                          {feedbackMut.isPending && feedbackStatus === 'approved'
-                            ? <Spinner animation="border" size="sm" screenReaderText="Saving" />
-                            : 'Approve'}
-                        </Button>
-                        <Button
-                          variant="outline-danger"
-                          onClick={() => { setFeedbackStatus('rejected'); feedbackMut.mutate(); }}
-                          disabled={feedbackMut.isPending}
-                        >
-                          {feedbackMut.isPending && feedbackStatus === 'rejected'
-                            ? <Spinner animation="border" size="sm" screenReaderText="Saving" />
-                            : 'Reject'}
-                        </Button>
+                        {(
+                          [
+                            { status: 'approved', label: 'Approve', variant: 'brand' },
+                            { status: 'rejected', label: 'Reject', variant: 'outline-danger' },
+                          ] as const
+                        ).map(({ status, label, variant }) => (
+                          <Button
+                            key={status}
+                            variant={variant}
+                            onClick={() => feedbackMut.mutate(status)}
+                            disabled={feedbackMut.isPending}
+                          >
+                            {feedbackMut.isPending && feedbackMut.variables === status
+                              ? <Spinner animation="border" size="sm" screenReaderText="Saving" />
+                              : label}
+                          </Button>
+                        ))}
                       </div>
 
                       {feedbackMut.isError && (
@@ -261,37 +292,94 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
           </div>
         </div>
 
-        {/* Version history */}
-        {versions.length > 0 && (
+        {/* Feedback history — always show if past feedback versions exist */}
+        {submission.feedback?.versions?.length > 0 && (
+          <Card className="shadow-sm mb-4">
+            <Card.Header title="Feedback History" />
+            <Card.Section>
+              {submission.feedback.versions.map((v: any) => (
+                <div
+                  key={v.version_number}
+                  className="mb-3 p-3 rounded"
+                  style={{ background: '#f8f9fa', borderLeft: `3px solid ${v.status === 'rejected' ? '#dc3545' : v.status === 'approved' ? '#28a745' : '#6c757d'}` }}
+                >
+                  <div className="d-flex align-items-center mb-1" style={{ gap: '0.5rem' }}>
+                    <Badge variant={FEEDBACK_BADGE[v.status] ?? 'secondary'}>
+                      {v.status}
+                    </Badge>
+                    <small className="text-muted">
+                      v{v.version_number}{v.created ? ` · ${new Date(v.created).toLocaleString()}` : ''}
+                    </small>
+                  </div>
+                  {v.comment ? (
+                    <p className="small mb-0" style={{ whiteSpace: 'pre-wrap' }}>{v.comment}</p>
+                  ) : (
+                    <p className="text-muted small mb-0">No comment.</p>
+                  )}
+                </div>
+              ))}
+            </Card.Section>
+          </Card>
+        )}
+
+        {/* Submission version history */}
+        {versionHistory.length > 0 && (
           <Card className="shadow-sm">
             <Card.Header title="Submission History" />
             <Card.Section>
-              {loadingVersions ? (
-                <Spinner animation="border" size="sm" screenReaderText="Loading versions" />
-              ) : (
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr style={{ borderBottom: '2px solid #dee2e6' }}>
-                      <th style={thStyle}>Version</th>
-                      <th style={thStyle}>Saved At</th>
-                      <th style={thStyle}>Fields</th>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid #dee2e6' }}>
+                    <th style={thStyle}>Version</th>
+                    <th style={thStyle}>Saved At</th>
+                    <th style={thStyle}>Fields</th>
+                    <th style={thStyle}>PDF</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {versionHistory.map((v: any) => (
+                    <tr key={v.version_number} style={{ borderBottom: '1px solid #dee2e6' }}>
+                      <td style={tdStyle}>v{v.version_number}</td>
+                      <td style={{ ...tdStyle, color: '#6b7280', fontSize: '0.85rem' }}>
+                        {v.saved_at ? new Date(v.saved_at).toLocaleString() : '—'}
+                      </td>
+                      <td style={{ ...tdStyle, color: '#6b7280', fontSize: '0.85rem' }}>
+                        {Object.keys(v.form_data ?? {}).length} field(s)
+                      </td>
+                      <td style={tdStyle}>
+                        {v.pdf_url ? (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                const res = await fetch(v.pdf_url, { credentials: 'include' });
+                                const blob = await res.blob();
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = `submission_v${v.version_number}.pdf`;
+                                a.click();
+                                URL.revokeObjectURL(url);
+                              } catch {
+                                window.open(v.pdf_url, '_blank');
+                              }
+                            }}
+                            style={{
+                              padding: '4px 10px', fontSize: 12, fontWeight: 600,
+                              background: '#2563eb', color: '#fff', border: 'none',
+                              borderRadius: 6, cursor: 'pointer',
+                            }}
+                          >
+                            ↓ PDF
+                          </button>
+                        ) : (
+                          <span style={{ color: '#9ca3af', fontSize: '0.85rem' }}>—</span>
+                        )}
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {versions.map((v: any) => (
-                      <tr key={v.version_number} style={{ borderBottom: '1px solid #dee2e6' }}>
-                        <td style={tdStyle}>v{v.version_number}</td>
-                        <td style={{ ...tdStyle, color: '#6b7280', fontSize: '0.85rem' }}>
-                          {v.saved_at ? new Date(v.saved_at).toLocaleString() : '—'}
-                        </td>
-                        <td style={{ ...tdStyle, color: '#6b7280', fontSize: '0.85rem' }}>
-                          {Object.keys(v.form_data ?? {}).length} field(s)
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
+                  ))}
+                </tbody>
+              </table>
             </Card.Section>
           </Card>
         )}

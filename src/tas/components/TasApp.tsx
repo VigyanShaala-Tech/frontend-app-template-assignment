@@ -57,41 +57,19 @@ export const TasApp: React.FC = () => {
     submissionsApi
       .createOrGetDraft({
         template_block_id: selectedTemplateBlockId,
-        form_data: {},
         usage_key: mfeContext.usageKey,
         course_id: mfeContext.courseId,
         student_id: mfeContext.studentId,
       })
       .then((sub) => {
         setSubmission(sub);
-        if (sub.status === 'draft' && Object.keys(sub.form_data).length > 0) {
+        if (Object.keys(sub.form_data).length > 0) {
           useTasStore.getState().setFormData(sub.form_data);
         }
       })
       .catch((err: any) => {
         draftCreating.current = false;
-        const status = err?.response?.status;
         const responseData = err?.response?.data;
-
-        // 409 means already submitted — show read-only state silently
-        if (status === 409) {
-          setSubmission({
-            id: '',
-            template_block_id: selectedTemplateBlockId ?? '',
-            student_id: mfeContext?.studentId ?? '',
-            course_id: mfeContext?.courseId ?? '',
-            usage_key: mfeContext?.usageKey ?? '',
-            form_data: {},
-            status: 'submitted',
-            version_number: 1,
-            submitted_at: null,
-            pdf_url: '',
-            created_at: '',
-            updated_at: '',
-          });
-          return;
-        }
-
         let msg = 'Failed to start assignment. Please reload and try again.';
         if (responseData?.detail) msg = responseData.detail;
         else if (responseData?.non_field_errors) {
@@ -117,6 +95,50 @@ export const TasApp: React.FC = () => {
       draftCreating.current = false;
     }
   }, [selectedTemplate]);
+
+  // ── Print / Save as PDF ───────────────────────────────────────────────────
+  const handlePrint = useCallback(() => {
+    if (!selectedTemplate) return;
+    const imageW = selectedTemplate.image_width || 794;
+    const imageH = selectedTemplate.image_height || 1123;
+
+    const fieldsHtml = selectedTemplate.fields.map((field) => {
+      const pos = selectedTemplate.field_positions[field.id];
+      const value = formData[field.id] ?? '';
+      if (!pos || !value) return '';
+      return `
+        <div style="
+          position:absolute;
+          left:${pos.x}%;top:${pos.y}%;
+          width:${pos.width}%;height:${pos.height}%;
+          font-size:${Math.max(8, imageH * pos.height / 100 * 0.55)}px;
+          font-weight:500;color:#111827;
+          overflow:hidden;padding:2px;box-sizing:border-box;
+          line-height:1.3;white-space:pre-wrap;
+        ">${value.replace(/</g, '&lt;')}</div>`;
+    }).join('');
+
+    const html = `<!DOCTYPE html><html><head>
+      <title>${selectedTemplate.name}</title>
+      <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { width:${imageW}px; }
+        @page { size:${imageW}px ${imageH}px; margin:0; }
+        @media print { body { width:${imageW}px; } }
+      </style>
+    </head><body>
+      <div style="position:relative;width:${imageW}px;height:${imageH}px;">
+        <img src="${selectedTemplate.image_url}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;" />
+        ${fieldsHtml}
+      </div>
+    </body></html>`;
+
+    const win = window.open('', '_blank');
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
+    win.onload = () => { win.focus(); win.print(); };
+  }, [selectedTemplate, formData]);
 
   // ── Save draft handler ─────────────────────────────────────────────────────
   const handleSaveDraft = useCallback(async () => {
@@ -263,6 +285,15 @@ export const TasApp: React.FC = () => {
           </button>
         )}
 
+        {/* Save as PDF */}
+        <button
+          type="button"
+          onClick={handlePrint}
+          style={{ ...btnBase, background: '#f3f4f6', color: '#374151' }}
+        >
+          ↓ Save as PDF
+        </button>
+
         {/* Save Draft */}
         {!isSubmitted && (
           <button
@@ -340,7 +371,7 @@ export const TasApp: React.FC = () => {
 
       {/* PDF / submission status banner */}
       {isSubmitted && (
-        <div className="flex-shrink-0 px-4 pb-4 bg-white border-top">
+        <div style={{ flexShrink: 0, padding: '0 16px 16px', background: '#fff', borderTop: '1px solid #e5e7eb' }}>
           <PdfPoller />
         </div>
       )}

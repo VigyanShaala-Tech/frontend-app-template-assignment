@@ -33,6 +33,7 @@ export const AdminSubmissionsList: React.FC<Props> = ({ onView }) => {
     queryKey: ['admin-submissions', usageKey],
     queryFn: () => adminSubmissionsApi.list({ usage_key: usageKey }),
     enabled: !!usageKey,
+    refetchOnMount: 'always',
   });
 
   const submissions = data ?? [];

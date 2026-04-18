@@ -83,6 +83,7 @@ function mapSubmission(raw: any): Submission {
     version_number: raw.version_number ?? 1,
     submitted_at: raw.submitted_at ?? null,
     pdf_url: raw.pdf_url ?? '',
+    feedback: raw.feedback ?? null,
     created_at: raw.created_at ?? '',
     updated_at: raw.updated_at ?? '',
   };
@@ -219,16 +220,16 @@ export const blockTemplatesApi = {
 export const submissionsApi = {
   createOrGetDraft: async (body: {
     template_block_id: string;
-    form_data: Record<string, string>;
     usage_key: string;
     course_id: string;
     student_id: string;
   }): Promise<Submission> => {
+    // Send empty form_data — backend preserves existing answers if draft already exists.
     const payload = {
       template_block_id: Number(body.template_block_id),
       course_key: body.course_id,
       usage_key: body.usage_key,
-      form_data: body.form_data,
+      form_data: {},
       status: 'draft',
     };
     const { data } = await http().post(`${tasBase()}/student-submission/`, payload);

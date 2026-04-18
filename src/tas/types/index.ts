@@ -86,7 +86,12 @@ export interface BlockTemplatesResponse {
 
 // ─── Submissions (tas_submissions) ────────────────────────────────────────────
 
-export type SubmissionStatus = 'draft' | 'submitted';
+export type SubmissionStatus = 'draft' | 'submitted' | 'rejected' | 'approved';
+
+export interface SubmissionFeedback {
+  status: 'pending' | 'approved' | 'rejected';
+  comment: string;
+}
 
 export interface Submission {
   id: string;
@@ -99,6 +104,7 @@ export interface Submission {
   version_number: number;
   submitted_at: string | null;
   pdf_url: string;
+  feedback?: SubmissionFeedback | null;
   created_at: string;
   updated_at: string;
 }
