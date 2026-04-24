@@ -11,16 +11,27 @@ import type { FormField } from '../types';
 
 interface Props {
   field: FormField | null;
+  fields: FormField[];
 }
 
-export const FieldEditorPopup: React.FC<Props> = ({ field }) => {
+export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
   const {
     isFieldEditorOpen,
     closeFieldEditor,
+    openFieldEditor,
     formData,
     setFormValue,
     isMobile,
   } = useTasStore();
+
+  const currentIndex = field ? fields.findIndex((f) => f.id === field.id) : -1;
+  const hasPrev = currentIndex > 0;
+  const hasNext = currentIndex >= 0 && currentIndex < fields.length - 1;
+
+  const saveAndNavigate = (targetField: FormField) => {
+    if (field) setFormValue(field.id, localValue);
+    openFieldEditor(targetField.id);
+  };
 
   const [localValue, setLocalValue] = React.useState('');
 
@@ -132,7 +143,42 @@ export const FieldEditorPopup: React.FC<Props> = ({ field }) => {
 
       {renderInput()}
 
-      <div style={{ display: 'flex', gap: 10, paddingTop: 8 }}>
+      {/* Prev / Next navigation */}
+      {fields.length > 1 && (
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            type="button"
+            disabled={!hasPrev}
+            onClick={() => saveAndNavigate(fields[currentIndex - 1])}
+            style={{
+              flex: 1, padding: '8px 0', borderRadius: 10,
+              border: '1.5px solid #d1d5db', background: '#fff',
+              color: hasPrev ? '#374151' : '#d1d5db', fontWeight: 600,
+              fontSize: 13, cursor: hasPrev ? 'pointer' : 'default',
+            }}
+          >
+            ← Prev
+          </button>
+          <span style={{ alignSelf: 'center', fontSize: 12, color: '#9ca3af', whiteSpace: 'nowrap' }}>
+            {currentIndex + 1} / {fields.length}
+          </span>
+          <button
+            type="button"
+            disabled={!hasNext}
+            onClick={() => saveAndNavigate(fields[currentIndex + 1])}
+            style={{
+              flex: 1, padding: '8px 0', borderRadius: 10,
+              border: '1.5px solid #d1d5db', background: '#fff',
+              color: hasNext ? '#374151' : '#d1d5db', fontWeight: 600,
+              fontSize: 13, cursor: hasNext ? 'pointer' : 'default',
+            }}
+          >
+            Next →
+          </button>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: 10 }}>
         <button
           type="button"
           onClick={closeFieldEditor}

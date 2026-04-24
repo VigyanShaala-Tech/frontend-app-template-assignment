@@ -7,9 +7,9 @@ import React, { useState, useRef, useCallback } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import {
-  Button, Form, Badge, Spinner,
+  Button, Form, Spinner,
 } from '@openedx/paragon';
-import { ArrowBack, Add, Close, ZoomIn, ZoomOut, Refresh } from '@openedx/paragon/icons';
+import { ArrowBack, Add, ZoomIn, ZoomOut, Refresh } from '@openedx/paragon/icons';
 import { templateTypesApi, adminTemplatesApi } from '../../services/api';
 import type { Template, FormField, FieldPosition, TemplateCreateBody } from '../../types';
 
@@ -20,119 +20,190 @@ function generateFieldId() {
 const FIELD_TYPES: FormField['type'][] = ['text', 'textarea', 'number', 'date', 'select', 'checkbox', 'radio'];
 const DEFAULT_POSITION: FieldPosition = { x: 10, y: 10, width: 40, height: 5 };
 
-const BADGE_COLORS = ['primary', 'success', 'warning', 'danger', 'info', 'dark'] as const;
-
 // ── FieldRow ──────────────────────────────────────────────────────────────────
 
 interface FieldRowProps {
   field: FormField;
   index: number;
   isSelected: boolean;
+  isDragOver: boolean;
   onSelect: () => void;
   onChange: (f: FormField) => void;
   onRemove: () => void;
+  onDragStart: () => void;
+  onDragOver: (e: React.DragEvent) => void;
+  onDrop: () => void;
+  onDragEnd: () => void;
 }
 
 const FONT_SIZES = [8, 9, 10, 11, 12, 13, 14, 16, 18, 20, 24];
 
-const FieldRow: React.FC<FieldRowProps> = ({ field, index, isSelected, onSelect, onChange, onRemove }) => (
+const FieldRow: React.FC<FieldRowProps> = ({
+  field, index, isSelected, isDragOver,
+  onSelect, onChange, onRemove,
+  onDragStart, onDragOver, onDrop, onDragEnd,
+}) => (
   <div
+    draggable
+    onDragStart={onDragStart}
+    onDragOver={onDragOver}
+    onDrop={onDrop}
+    onDragEnd={onDragEnd}
     onClick={onSelect}
-    className="mb-2"
     style={{
-      border: `2px solid ${isSelected ? '#0000ff' : '#e5e7eb'}`,
-      borderRadius: 10, padding: '8px 10px',
-      background: isSelected ? '#eff6ff' : '#fff',
-      cursor: 'pointer', transition: 'border-color 0.15s',
+      borderRadius: 8,
+      border: `1.5px solid ${isDragOver ? '#6366f1' : isSelected ? '#2563eb' : '#e5e7eb'}`,
+      background: isDragOver ? '#eef2ff' : isSelected ? '#f8faff' : '#fff',
+      marginBottom: 6,
+      transition: 'border-color 0.1s, background 0.1s',
+      overflow: 'hidden',
     }}
   >
-    {/* Row: index + label + delete */}
-    <div className="d-flex align-items-center gap-2 mb-1">
-      <Badge variant="light" className="border" style={{ minWidth: 22, textAlign: 'center', fontSize: 10, flexShrink: 0 }}>
+    {/* Collapsed header — always visible */}
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 8px' }}>
+      <span
+        title="Drag to reorder"
+        style={{ cursor: 'grab', fontSize: 13, color: '#c4c9d4', flexShrink: 0, lineHeight: 1, userSelect: 'none', paddingRight: 2 }}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        ⠿
+      </span>
+
+      <span style={{
+        flexShrink: 0, minWidth: 18, height: 18, borderRadius: 4,
+        background: isSelected ? '#2563eb' : '#e5e7eb',
+        color: isSelected ? '#fff' : '#6b7280',
+        fontSize: 10, fontWeight: 700,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
         {index + 1}
-      </Badge>
+      </span>
 
-      <Form.Control
-        value={field.label}
-        onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange({ ...field, label: e.target.value })}
-        placeholder="Field label"
-        size="sm"
-        onClick={(e: React.MouseEvent) => e.stopPropagation()}
-        floatingLabel=""
-        style={{ flex: 1 }}
-      />
+      <span style={{
+        flex: 1, fontSize: 13, fontWeight: isSelected ? 600 : 400,
+        color: field.label ? '#111827' : '#9ca3af',
+        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+      }}>
+        {field.label || 'Untitled field'}
+      </span>
 
-      <Button
-        variant="tertiary"
-        size="sm"
-        className="p-0 text-danger"
-        iconBefore={Close}
-        onClick={(e: React.MouseEvent) => { e.stopPropagation(); onRemove(); }}
+      <span style={{
+        flexShrink: 0, fontSize: 10, color: '#9ca3af',
+        background: '#f3f4f6', borderRadius: 4, padding: '2px 5px',
+      }}>
+        {field.type}
+      </span>
+
+      {field.required && (
+        <span style={{ flexShrink: 0, fontSize: 11, color: '#ef4444', fontWeight: 700 }}>*</span>
+      )}
+
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onRemove(); }}
+        style={{
+          flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer',
+          color: '#d1d5db', fontSize: 14, lineHeight: 1, padding: '0 2px',
+          borderRadius: 4,
+        }}
+        title="Remove field"
       >
-        {' '}
-      </Button>
+        ✕
+      </button>
     </div>
 
-    {/* Row: type + font size + max chars + required */}
-    <div className="d-flex align-items-center gap-2" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
-      <Form.Control
-        as="select"
-        value={field.type}
-        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => onChange({ ...field, type: e.target.value as FormField['type'] })}
-        size="sm"
-        style={{ flex: 2, minWidth: 0 }}
+    {/* Expanded detail — only when selected */}
+    {isSelected && (
+      <div
+        style={{ borderTop: '1px solid #e5e7eb', padding: '10px 10px 12px', background: '#f9fafb' }}
+        onClick={(e) => e.stopPropagation()}
       >
-        {FIELD_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-      </Form.Control>
+        {/* Label input */}
+        <div style={{ marginBottom: 8 }}>
+          <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>
+            Label
+          </label>
+          <Form.Control
+            value={field.label}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange({ ...field, label: e.target.value })}
+            placeholder="Field label"
+            size="sm"
+          />
+        </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }}>
-        <span style={{ fontSize: 10, color: '#6b7280', whiteSpace: 'nowrap' }}>px</span>
-        <Form.Control
-          as="select"
-          value={field.fontSize ?? 14}
-          onChange={(e: React.ChangeEvent<HTMLSelectElement>) => onChange({ ...field, fontSize: parseInt(e.target.value, 10) })}
-          size="sm"
-          style={{ width: 54 }}
-          title="Default font size"
-        >
-          {FONT_SIZES.map((s) => <option key={s} value={s}>{s}</option>)}
-        </Form.Control>
-      </div>
+        {/* Type + Required row */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'flex-end' }}>
+          <div style={{ flex: 1 }}>
+            <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>
+              Type
+            </label>
+            <Form.Control
+              as="select"
+              value={field.type}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => onChange({ ...field, type: e.target.value as FormField['type'] })}
+              size="sm"
+            >
+              {FIELD_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+            </Form.Control>
+          </div>
+          <div style={{ paddingBottom: 4 }}>
+            <Form.Checkbox
+              label="Required"
+              checked={field.required}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange({ ...field, required: e.target.checked })}
+            />
+          </div>
+        </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }}>
-        <span style={{ fontSize: 10, color: '#6b7280', whiteSpace: 'nowrap' }}>max</span>
-        <Form.Control
-          type="number"
-          size="sm"
-          min={1}
-          max={500}
-          value={field.maxChars ?? 60}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange({ ...field, maxChars: parseInt(e.target.value, 10) || 60 })}
-          style={{ width: 54 }}
-          title="Max characters"
-        />
-      </div>
+        {/* Font size + Max chars row */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+          <div style={{ flex: 1 }}>
+            <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>
+              Font size (px)
+            </label>
+            <Form.Control
+              as="select"
+              value={field.fontSize ?? 14}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => onChange({ ...field, fontSize: parseInt(e.target.value, 10) })}
+              size="sm"
+            >
+              {FONT_SIZES.map((s) => <option key={s} value={s}>{s}px</option>)}
+            </Form.Control>
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>
+              Max chars
+            </label>
+            <Form.Control
+              type="number"
+              size="sm"
+              min={1}
+              max={500}
+              value={field.maxChars ?? 60}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange({ ...field, maxChars: parseInt(e.target.value, 10) || 60 })}
+            />
+          </div>
+        </div>
 
-      <Form.Checkbox
-        label="Req"
-        checked={field.required}
-        onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange({ ...field, required: e.target.checked })}
-      />
-    </div>
-
-    {isSelected && (field.type === 'select' || field.type === 'radio') && (
-      <div className="mt-2" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
-        <Form.Label className="x-small text-muted">Options (one per line)</Form.Label>
-        <Form.Control
-          as="textarea"
-          rows={3}
-          value={(field.options ?? []).join('\n')}
-          onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
-            onChange({ ...field, options: e.target.value.split('\n').filter((o) => o.trim()) })
-          }
-          placeholder={'Option A\nOption B'}
-          size="sm"
-        />
+        {/* Options — select / radio only */}
+        {(field.type === 'select' || field.type === 'radio') && (
+          <div>
+            <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>
+              Options (one per line)
+            </label>
+            <Form.Control
+              as="textarea"
+              rows={3}
+              value={(field.options ?? []).join('\n')}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                onChange({ ...field, options: e.target.value.split('\n').filter((o) => o.trim()) })
+              }
+              placeholder={'Option A\nOption B'}
+              size="sm"
+              style={{ resize: 'none' }}
+            />
+          </div>
+        )}
       </div>
     )}
   </div>
@@ -299,6 +370,8 @@ export const AdminTemplateEditor: React.FC<Props> = ({ template, onBack }) => {
   const [fields, setFields] = useState<FormField[]>(template?.fields ?? []);
   const [positions, setPositions] = useState<Record<string, FieldPosition>>(template?.field_positions ?? {});
   const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
+  const [dragFromIndex, setDragFromIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const imageNaturalW = template?.image_width || 794;
@@ -335,6 +408,16 @@ export const AdminTemplateEditor: React.FC<Props> = ({ template, onBack }) => {
 
   const updatePosition = useCallback((id: string, pos: FieldPosition) => {
     setPositions((prev) => ({ ...prev, [id]: pos }));
+  }, []);
+
+  const reorderFields = useCallback((fromIdx: number, toIdx: number) => {
+    if (fromIdx === toIdx) return;
+    setFields((prev) => {
+      const next = [...prev];
+      const [moved] = next.splice(fromIdx, 1);
+      next.splice(toIdx, 0, moved);
+      return next;
+    });
   }, []);
 
   const handleSave = () => {
@@ -480,9 +563,18 @@ export const AdminTemplateEditor: React.FC<Props> = ({ template, onBack }) => {
                 field={f}
                 index={i}
                 isSelected={selectedFieldId === f.id}
+                isDragOver={dragOverIndex === i}
                 onSelect={() => setSelectedFieldId(f.id)}
                 onChange={updateField}
                 onRemove={() => removeField(f.id)}
+                onDragStart={() => setDragFromIndex(i)}
+                onDragOver={(e) => { e.preventDefault(); setDragOverIndex(i); }}
+                onDrop={() => {
+                  if (dragFromIndex !== null) reorderFields(dragFromIndex, i);
+                  setDragFromIndex(null);
+                  setDragOverIndex(null);
+                }}
+                onDragEnd={() => { setDragFromIndex(null); setDragOverIndex(null); }}
               />
             ))}
 

@@ -371,7 +371,7 @@ export const TasApp: React.FC = () => {
       </div>
 
       {/* Field editor popup */}
-      {!isSubmitted && <FieldEditorPopup field={selectedField} />}
+      {!isSubmitted && <FieldEditorPopup field={selectedField} fields={selectedTemplate.fields} />}
 
       {/* PDF / submission status banner */}
       {isSubmitted && (

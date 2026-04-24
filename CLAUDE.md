@@ -79,3 +79,6 @@ The admin template editor (`AdminTemplateEditor`) lets staff drag-position field
 ### Environment
 
 `.env.development` targets a local Tutor instance (`local.openedx.io`). See `SETUP.md` for full local development setup with Tutor.
+
+
+Strict notes: alwasys tun tests at the last
