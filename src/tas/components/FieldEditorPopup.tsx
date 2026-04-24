@@ -55,6 +55,12 @@ export const FieldEditorPopup: React.FC<Props> = ({ field }) => {
     transition: 'border-color 0.15s',
   };
 
+  const maxChars = field.maxChars ?? 60;
+
+  const handleChange = (value: string) => {
+    setLocalValue(value.slice(0, maxChars));
+  };
+
   const renderInput = () => {
     switch (field.type) {
       case 'select':
@@ -94,15 +100,20 @@ export const FieldEditorPopup: React.FC<Props> = ({ field }) => {
           />
         );
       default:
-        // text and textarea both get a large textarea
         return (
-          <textarea
-            style={{ ...inputStyle, minHeight: 120, resize: 'vertical', lineHeight: 1.6 }}
-            placeholder={field.placeholder || `Enter ${field.label}`}
-            value={localValue}
-            onChange={(e) => setLocalValue(e.target.value)}
-            autoFocus
-          />
+          <>
+            <textarea
+              style={{ ...inputStyle, minHeight: 120, resize: 'vertical', lineHeight: 1.6 }}
+              placeholder={field.placeholder || `Enter ${field.label}`}
+              value={localValue}
+              maxLength={maxChars}
+              onChange={(e) => handleChange(e.target.value)}
+              autoFocus
+            />
+            <div style={{ fontSize: 12, color: localValue.length >= maxChars ? '#ef4444' : '#9ca3af', textAlign: 'right', marginTop: -8 }}>
+              {localValue.length}/{maxChars}
+            </div>
+          </>
         );
     }
   };

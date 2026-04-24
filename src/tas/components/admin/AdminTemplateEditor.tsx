@@ -33,6 +33,8 @@ interface FieldRowProps {
   onRemove: () => void;
 }
 
+const FONT_SIZES = [8, 9, 10, 11, 12, 13, 14, 16, 18, 20, 24];
+
 const FieldRow: React.FC<FieldRowProps> = ({ field, index, isSelected, onSelect, onChange, onRemove }) => (
   <div
     onClick={onSelect}
@@ -44,8 +46,9 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, index, isSelected, onSelect,
       cursor: 'pointer', transition: 'border-color 0.15s',
     }}
   >
-    <div className="d-flex align-items-center gap-2">
-      <Badge variant="light" className="border" style={{ minWidth: 22, textAlign: 'center', fontSize: 10 }}>
+    {/* Row: index + label + delete */}
+    <div className="d-flex align-items-center gap-2 mb-1">
+      <Badge variant="light" className="border" style={{ minWidth: 22, textAlign: 'center', fontSize: 10, flexShrink: 0 }}>
         {index + 1}
       </Badge>
 
@@ -59,24 +62,6 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, index, isSelected, onSelect,
         style={{ flex: 1 }}
       />
 
-      <Form.Control
-        as="select"
-        value={field.type}
-        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => onChange({ ...field, type: e.target.value as FormField['type'] })}
-        size="sm"
-        onClick={(e: React.MouseEvent) => e.stopPropagation()}
-        style={{ width: 'auto' }}
-      >
-        {FIELD_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-      </Form.Control>
-
-      <Form.Checkbox
-        label="Req"
-        checked={field.required}
-        onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange({ ...field, required: e.target.checked })}
-        onClick={(e: React.MouseEvent) => e.stopPropagation()}
-      />
-
       <Button
         variant="tertiary"
         size="sm"
@@ -86,6 +71,53 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, index, isSelected, onSelect,
       >
         {' '}
       </Button>
+    </div>
+
+    {/* Row: type + font size + max chars + required */}
+    <div className="d-flex align-items-center gap-2" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+      <Form.Control
+        as="select"
+        value={field.type}
+        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => onChange({ ...field, type: e.target.value as FormField['type'] })}
+        size="sm"
+        style={{ flex: 2, minWidth: 0 }}
+      >
+        {FIELD_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+      </Form.Control>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }}>
+        <span style={{ fontSize: 10, color: '#6b7280', whiteSpace: 'nowrap' }}>px</span>
+        <Form.Control
+          as="select"
+          value={field.fontSize ?? 14}
+          onChange={(e: React.ChangeEvent<HTMLSelectElement>) => onChange({ ...field, fontSize: parseInt(e.target.value, 10) })}
+          size="sm"
+          style={{ width: 54 }}
+          title="Default font size"
+        >
+          {FONT_SIZES.map((s) => <option key={s} value={s}>{s}</option>)}
+        </Form.Control>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }}>
+        <span style={{ fontSize: 10, color: '#6b7280', whiteSpace: 'nowrap' }}>max</span>
+        <Form.Control
+          type="number"
+          size="sm"
+          min={1}
+          max={500}
+          value={field.maxChars ?? 60}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange({ ...field, maxChars: parseInt(e.target.value, 10) || 60 })}
+          style={{ width: 54 }}
+          title="Max characters"
+        />
+      </div>
+
+      <Form.Checkbox
+        label="Req"
+        checked={field.required}
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange({ ...field, required: e.target.checked })}
+      />
     </div>
 
     {isSelected && (field.type === 'select' || field.type === 'radio') && (
@@ -125,6 +157,7 @@ const DraggableOverlay: React.FC<DraggableOverlayProps> = ({
 }) => {
   const dragRef = useRef<{ sx: number; sy: number; ox: number; oy: number; rw: number; rh: number } | null>(null);
   const resizeRef = useRef<{ sx: number; sy: number; ow: number; oh: number; rw: number; rh: number } | null>(null);
+  const [isHovered, setIsHovered] = useState(false);
 
   const borderColor = BORDER_COLORS[fieldIndex % BORDER_COLORS.length];
 
@@ -193,6 +226,8 @@ const DraggableOverlay: React.FC<DraggableOverlayProps> = ({
   return (
     <div
       onMouseDown={onMouseDown}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       style={{
         position: 'absolute',
         left: px.left, top: px.top, width: px.width, height: px.height,
@@ -203,16 +238,19 @@ const DraggableOverlay: React.FC<DraggableOverlayProps> = ({
         boxShadow: isSelected ? `0 0 0 2px ${borderColor}40` : 'none',
       }}
     >
-      {/* Label badge */}
-      <div style={{
-        position: 'absolute', left: 0, top: -18,
-        background: borderColor, color: '#fff',
-        fontSize: 9, fontWeight: 700,
-        padding: '2px 6px', borderRadius: 3,
-        whiteSpace: 'nowrap', pointerEvents: 'none',
-      }}>
-        {fieldIndex + 1}. {field.label || '(unnamed)'}{field.required ? ' *' : ''}
-      </div>
+      {/* Label badge — visible on hover or when selected */}
+      {(isHovered || isSelected) && (
+        <div style={{
+          position: 'absolute', left: 0, top: -18,
+          background: borderColor, color: '#fff',
+          fontSize: 9, fontWeight: 700,
+          padding: '2px 6px', borderRadius: 3,
+          whiteSpace: 'nowrap', pointerEvents: 'none',
+          zIndex: 10,
+        }}>
+          {fieldIndex + 1}. {field.label || '(unnamed)'}{field.required ? ' *' : ''}
+        </div>
+      )}
 
       {/* Type hint */}
       <div style={{
@@ -358,7 +396,7 @@ export const AdminTemplateEditor: React.FC<Props> = ({ template, onBack }) => {
         {/* Left panel */}
         <div
           className="overflow-auto bg-white border-right"
-          style={{ width: 288, flexShrink: 0 }}
+          style={{ width: 380, flexShrink: 0 }}
         >
           {/* Details */}
           <div className="p-3 border-bottom">

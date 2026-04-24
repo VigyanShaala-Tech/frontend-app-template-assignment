@@ -104,14 +104,18 @@ export const TasApp: React.FC = () => {
 
     const fieldsHtml = selectedTemplate.fields.map((field) => {
       const pos = selectedTemplate.field_positions[field.id];
-      const value = formData[field.id] ?? '';
+      const raw = formData[field.id] ?? '';
+      const maxChars = field.maxChars ?? 60;
+      const value = raw.slice(0, maxChars);
       if (!pos || !value) return '';
+      const fieldHeightPx = imageH * pos.height / 100;
+      const baseFontSize = field.fontSize ?? Math.max(10, Math.min(20, fieldHeightPx * 0.6));
       return `
         <div style="
           position:absolute;
           left:${pos.x}%;top:${pos.y}%;
           width:${pos.width}%;height:${pos.height}%;
-          font-size:${Math.max(8, imageH * pos.height / 100 * 0.55)}px;
+          font-size:${baseFontSize}px;
           font-weight:500;color:#111827;
           overflow:hidden;padding:2px;box-sizing:border-box;
           line-height:1.3;white-space:pre-wrap;

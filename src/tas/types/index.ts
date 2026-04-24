@@ -28,6 +28,8 @@ export interface FormField {
   required: boolean;
   options?: string[];
   placeholder?: string;
+  fontSize?: number;      // default font size in px (default 14)
+  maxChars?: number;      // max character limit (default 60)
 }
 
 export interface FieldPosition {

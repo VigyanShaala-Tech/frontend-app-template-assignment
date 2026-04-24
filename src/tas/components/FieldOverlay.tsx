@@ -4,9 +4,9 @@
  * Uses inline styles for positioning (no Tailwind/Paragon needed for absolute placement).
  */
 
-import React from 'react';
+import React, { useRef, useLayoutEffect, useState } from 'react';
 import { useTasStore } from '../store/tasStore';
-import { percentToPixels, calculateFontSize } from '../utils/positioning';
+import { percentToPixels } from '../utils/positioning';
 import type { FormField, FieldPosition } from '../types';
 
 interface FieldOverlayProps {
@@ -22,6 +22,31 @@ interface FieldOverlayProps {
   isReadOnly?: boolean;
 }
 
+/** Shrinks font size by up to two steps if content overflows the container. */
+function useAutoFontSize(
+  containerRef: React.RefObject<HTMLDivElement>,
+  baseFontSize: number,
+  value: string,
+): number {
+  const [fontSize, setFontSize] = useState(baseFontSize);
+
+  useLayoutEffect(() => {
+    setFontSize(baseFontSize);
+  }, [baseFontSize, value]);
+
+  useLayoutEffect(() => {
+    const el = containerRef.current;
+    if (!el || !value) return;
+
+    if (el.scrollHeight > el.clientHeight || el.scrollWidth > el.clientWidth) {
+      const smaller = baseFontSize - 2;
+      if (smaller >= 8) setFontSize(smaller);
+    }
+  });
+
+  return fontSize;
+}
+
 export const FieldOverlay: React.FC<FieldOverlayProps> = ({
   field,
   position,
@@ -31,14 +56,19 @@ export const FieldOverlay: React.FC<FieldOverlayProps> = ({
   isReadOnly = false,
 }) => {
   const { openFieldEditor, formData, isMobile, submission } = useTasStore();
+  const valueRef = useRef<HTMLDivElement>(null);
 
   const actualPx = percentToPixels(position, actualImageWidth, actualImageHeight);
-  const fontSize = calculateFontSize(actualPx.height);
+  const baseFontSize = field.fontSize ?? Math.max(10, Math.min(20, actualPx.height * 0.6));
 
-  const fieldValue = formData[field.id] ?? '';
+  const maxChars = field.maxChars ?? 60;
+  const rawValue = formData[field.id] ?? '';
+  const fieldValue = rawValue.slice(0, maxChars);
   const hasValue = fieldValue.trim().length > 0;
   const isSubmitted = submission?.status === 'submitted';
   const isInactive = isReadOnly || isSubmitted;
+
+  const displayFontSize = useAutoFontSize(valueRef, isMobile ? baseFontSize * 0.55 : baseFontSize, fieldValue);
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -104,6 +134,7 @@ export const FieldOverlay: React.FC<FieldOverlayProps> = ({
       {/* Value preview */}
       {hasValue && (
         <div
+          ref={valueRef}
           style={{
             position: 'absolute',
             inset: 0,
@@ -111,7 +142,7 @@ export const FieldOverlay: React.FC<FieldOverlayProps> = ({
             fontWeight: 500,
             color: '#111827',
             lineHeight: 1.3,
-            fontSize: isMobile ? fontSize * 0.55 : fontSize,
+            fontSize: displayFontSize,
             padding: 2,
           }}
         >
