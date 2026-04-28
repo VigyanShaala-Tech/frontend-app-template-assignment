@@ -10,7 +10,11 @@ import { getConfig } from '@edx/frontend-platform';
 import type {
   TemplateType,
   Template,
+  Rubric,
+  RubricCriterion,
   BlockTemplatesResponse,
+  BlockRubricsResponse,
+  RubricFeedbackEntry,
   Submission,
   SubmissionStatus,
   SubmissionVersionsResponse,
@@ -265,6 +269,44 @@ export const submissionsApi = {
   },
 };
 
+// ─── Admin: Rubrics CRUD ──────────────────────────────────────────────────────
+
+function mapRubric(raw: any): Rubric {
+  return {
+    id: String(raw.id),
+    name: raw.name,
+    criteria: raw.criteria ?? [],
+    is_active: raw.is_active,
+  };
+}
+
+export const rubricsApi = {
+  list: async (): Promise<{ count: number; results: Rubric[] }> => {
+    const { data } = await http().get(`${tasBase()}/rubrics/`, {
+      params: { is_active: true, page_size: 100 },
+    });
+    const raw: any[] = Array.isArray(data) ? data : (data.results ?? []);
+    return {
+      count: Array.isArray(data) ? data.length : (data.count ?? raw.length),
+      results: raw.map(mapRubric),
+    };
+  },
+
+  create: async (body: { name: string; criteria: RubricCriterion[] }): Promise<Rubric> => {
+    const { data } = await http().post(`${tasBase()}/rubrics/`, body);
+    return mapRubric(data);
+  },
+
+  update: async (id: string, body: { name?: string; criteria?: RubricCriterion[] }): Promise<Rubric> => {
+    const { data } = await http().patch(`${tasBase()}/rubrics/${id}/`, body);
+    return mapRubric(data);
+  },
+
+  delete: async (id: string): Promise<void> => {
+    await http().delete(`${tasBase()}/rubrics/${id}/`);
+  },
+};
+
 // ─── Admin: Submissions ───────────────────────────────────────────────────────
 
 export const adminSubmissionsApi = {
@@ -285,7 +327,7 @@ export const adminSubmissionsApi = {
     return data;
   },
 
-  getRubrics: async (usageKey: string): Promise<any> => {
+  getRubrics: async (usageKey: string): Promise<BlockRubricsResponse> => {
     const { data } = await http().get(
       `${tasBase()}/block/${encodeURIComponent(usageKey)}/rubrics/`,
     );
@@ -294,7 +336,7 @@ export const adminSubmissionsApi = {
 
   submitFeedback: async (
     submissionId: string,
-    payload: { rubrics?: any[]; comment?: string; status?: string },
+    payload: { rubrics?: RubricFeedbackEntry[]; comment?: string; status?: string },
   ): Promise<void> => {
     await http().post(`${tasBase()}/submissions/${submissionId}/feedback/`, payload);
   },

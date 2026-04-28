@@ -7,6 +7,7 @@ import type {
   Template,
   TemplateBlockItem,
   BlockTemplatesResponse,
+  BlockRubricsResponse,
   Submission,
   SubmissionVersion,
 } from '../types';
@@ -123,6 +124,42 @@ export const MOCK_BLOCK_TEMPLATES: Record<string, BlockTemplatesResponse> = {
       },
     })),
   },
+};
+
+// ─── Rubrics ─────────────────────────────────────────────────────────────────
+
+export const MOCK_BLOCK_RUBRICS: BlockRubricsResponse = {
+  display_name: 'Biology Lab Report',
+  instructions: 'Grade the student submission using the criteria below.',
+  rubrics: [
+    {
+      criterion: 'Hypothesis',
+      options: [
+        { name: 'Excellent', marks: 10 },
+        { name: 'Good', marks: 7 },
+        { name: 'Needs Improvement', marks: 4 },
+        { name: 'Incomplete', marks: 0 },
+      ],
+    },
+    {
+      criterion: 'Methodology',
+      options: [
+        { name: 'Excellent', marks: 10 },
+        { name: 'Good', marks: 7 },
+        { name: 'Needs Improvement', marks: 4 },
+        { name: 'Incomplete', marks: 0 },
+      ],
+    },
+    {
+      criterion: 'Results & Analysis',
+      options: [
+        { name: 'Excellent', marks: 15 },
+        { name: 'Good', marks: 10 },
+        { name: 'Needs Improvement', marks: 5 },
+        { name: 'Incomplete', marks: 0 },
+      ],
+    },
+  ],
 };
 
 // ─── In-memory submission store ───────────────────────────────────────────────

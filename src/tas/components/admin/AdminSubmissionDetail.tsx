@@ -14,8 +14,9 @@ import {
   Button, Badge, Spinner, Form, Card,
 } from '@openedx/paragon';
 import { ArrowBack, CheckCircle } from '@openedx/paragon/icons';
-import { adminSubmissionsApi } from '../../services/api';
+import { adminSubmissionsApi, templatesApi } from '../../services/api';
 import { useTasStore } from '../../store/tasStore';
+import type { RubricCriterion, RubricFeedbackEntry } from '../../types';
 
 interface Props {
   submissionId: string;
@@ -40,7 +41,8 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
   const queryClient = useQueryClient();
 
   const [comment, setComment] = useState('');
-  const [rubricScores, setRubricScores] = useState<Record<string, string>>({});
+  // Maps criterion name → selected option name
+  const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
   const [feedbackSaved, setFeedbackSaved] = useState(false);
 
   const { data: submission, isLoading: loadingSub } = useQuery({
@@ -54,14 +56,31 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
     enabled: !!usageKey,
   });
 
+  // template_id comes from the backend once deployed; fall back to fetching by template_block_id
+  const templateId = submission?.template_block_id ?? '';
+  const { data: templateDetail } = useQuery({
+    queryKey: ['template-detail', templateId],
+    queryFn: () => templatesApi.get(templateId),
+    enabled: !!templateId,
+  });
+
 
   const feedbackMut = useMutation({
-    mutationFn: (status: 'approved' | 'rejected') =>
-      adminSubmissionsApi.submitFeedback(submissionId, {
+    mutationFn: (feedbackStatus: 'approved' | 'rejected') => {
+      const rubricList: RubricCriterion[] = rubrics?.rubrics ?? [];
+      const rubricPayload: RubricFeedbackEntry[] = rubricList
+        .filter((c) => selectedOptions[c.criterion])
+        .map((c) => {
+          const optionName = selectedOptions[c.criterion];
+          const option = c.options.find((o) => o.name === optionName);
+          return { criterion: c.criterion, selected_option: optionName, marks: option?.marks ?? 0 };
+        });
+      return adminSubmissionsApi.submitFeedback(submissionId, {
         comment,
-        rubrics: Object.entries(rubricScores).map(([criterion, score]) => ({ criterion, score })),
-        status,
-      }),
+        rubrics: rubricPayload,
+        status: feedbackStatus,
+      });
+    },
     onSuccess: () => {
       setFeedbackSaved(true);
       queryClient.invalidateQueries({ queryKey: ['admin-submission-detail', submissionId] });
@@ -88,7 +107,10 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
     );
   }
 
-  const rubricList: any[] = rubrics?.rubrics ?? [];
+  const rubricList: RubricCriterion[] = rubrics?.rubrics ?? [];
+  // Build field_id → label: prefer backend-provided map, fall back to fetched template fields
+  const fieldLabels: Record<string, string> = submission.template_fields
+    ?? Object.fromEntries((templateDetail?.fields ?? []).map((f) => [f.id, f.label]));
   const formEntries = Object.entries(submission.form_data ?? {});
   const versionHistory: any[] = submission.version_history ?? [];
   const isSubmitted = submission.status === 'submitted';
@@ -117,9 +139,51 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
       {/* Body */}
       <div className="flex-grow-1 overflow-auto p-4">
         <div className="row">
-          {/* Left: Student answers */}
+          {/* Left: PDF viewer (top) + Student answers (below) */}
           <div className="col-12 col-lg-6 mb-4">
-            <Card className="shadow-sm mb-4">
+            {/* PDF inline viewer */}
+            {submission.pdf && (
+              <Card className="shadow-sm mb-4">
+                <Card.Header title="Submitted PDF" />
+                <Card.Section style={{ padding: 0 }}>
+                  <iframe
+                    src={submission.pdf}
+                    title="Student submission PDF"
+                    style={{ width: '100%', height: 600, border: 'none', display: 'block' }}
+                  />
+                  <div className="px-3 py-2 border-top" style={{ background: '#f8f9fa' }}>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const res = await fetch(submission.pdf, { credentials: 'include' });
+                          const blob = await res.blob();
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = `submission_${submission.id}.pdf`;
+                          a.click();
+                          URL.revokeObjectURL(url);
+                        } catch {
+                          window.open(submission.pdf, '_blank');
+                        }
+                      }}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                        padding: '6px 14px', background: '#2563eb', color: '#fff',
+                        border: 'none', borderRadius: 6, fontWeight: 600,
+                        fontSize: 13, cursor: 'pointer',
+                      }}
+                    >
+                      ↓ Download PDF
+                    </button>
+                  </div>
+                </Card.Section>
+              </Card>
+            )}
+
+            {/* Student answers */}
+            <Card className="shadow-sm">
               <Card.Header title="Student Answers" />
               <Card.Section>
                 {formEntries.length === 0 && (
@@ -127,7 +191,9 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
                 )}
                 {formEntries.map(([fieldId, value]) => (
                   <div key={fieldId} className="mb-3">
-                    <div className="small font-weight-bold text-muted mb-1">{fieldId}</div>
+                    <div className="small font-weight-bold text-muted mb-1">
+                      {fieldLabels[fieldId] ?? fieldId}
+                    </div>
                     <div
                       className="p-2 rounded"
                       style={{ background: '#f8f9fa', minHeight: 36, wordBreak: 'break-word' }}
@@ -138,39 +204,6 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
                 ))}
               </Card.Section>
             </Card>
-
-            {submission.pdf && (
-              <Card className="shadow-sm">
-                <Card.Header title="PDF Submission" />
-                <Card.Section>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      try {
-                        const res = await fetch(submission.pdf, { credentials: 'include' });
-                        const blob = await res.blob();
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `submission_${submission.id}.pdf`;
-                        a.click();
-                        URL.revokeObjectURL(url);
-                      } catch {
-                        window.open(submission.pdf, '_blank');
-                      }
-                    }}
-                    style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 6,
-                      padding: '8px 16px', background: '#2563eb', color: '#fff',
-                      border: 'none', borderRadius: 8, fontWeight: 600,
-                      fontSize: 14, cursor: 'pointer',
-                    }}
-                  >
-                    ↓ Download PDF
-                  </button>
-                </Card.Section>
-              </Card>
-            )}
           </div>
 
           {/* Right: Feedback form (submitted) or past feedback (rejected) */}
@@ -186,10 +219,15 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
                     </Badge>
                     {submission.feedback.rubrics?.length > 0 && (
                       <div className="mt-2 mb-2">
-                        {submission.feedback.rubrics.map((r: any, i: number) => (
+                        {submission.feedback.rubrics.map((r: RubricFeedbackEntry, i: number) => (
                           <div key={i} className="d-flex justify-content-between small py-1" style={{ borderBottom: '1px solid #e9ecef' }}>
                             <span>{r.criterion}</span>
-                            <strong>{r.score}</strong>
+                            <span>
+                              <strong>{r.selected_option}</strong>
+                              {r.marks != null && (
+                                <span className="text-muted ml-1">({r.marks} pts)</span>
+                              )}
+                            </span>
                           </div>
                         ))}
                       </div>
@@ -221,29 +259,45 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
                       {rubricList.length > 0 && (
                         <div className="mb-4">
                           <p className="font-weight-bold small mb-2">Rubric Scores</p>
-                          {rubricList.map((rubric: any, idx: number) => (
-                            <Form.Group key={idx} className="mb-3">
-                              <Form.Label className="small font-weight-bold">
-                                {rubric.criterion ?? rubric.name ?? `Criterion ${idx + 1}`}
-                                {rubric.max_score && (
-                                  <span className="text-muted font-weight-normal ml-1">
-                                    (max {rubric.max_score})
-                                  </span>
-                                )}
+                          {rubricList.map((rubric, idx) => (
+                            <Form.Group key={idx} className="mb-4">
+                              <Form.Label className="small font-weight-bold d-block mb-2">
+                                {rubric.criterion || `Criterion ${idx + 1}`}
                               </Form.Label>
-                              <Form.Control
-                                type="number"
-                                min={0}
-                                max={rubric.max_score ?? 100}
-                                value={rubricScores[rubric.criterion ?? String(idx)] ?? ''}
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                                  setRubricScores((prev) => ({
-                                    ...prev,
-                                    [rubric.criterion ?? String(idx)]: e.target.value,
-                                  }))
-                                }
-                                placeholder="Score"
-                              />
+                              <div className="d-flex flex-wrap" style={{ gap: '0.5rem' }}>
+                                {rubric.options.map((opt) => {
+                                  const isSelected = selectedOptions[rubric.criterion] === opt.name;
+                                  return (
+                                    <button
+                                      key={opt.name}
+                                      type="button"
+                                      onClick={() => setSelectedOptions((prev) => ({
+                                        ...prev,
+                                        [rubric.criterion]: opt.name,
+                                      }))}
+                                      style={{
+                                        padding: '6px 14px',
+                                        borderRadius: 6,
+                                        border: `2px solid ${isSelected ? '#2563eb' : '#dee2e6'}`,
+                                        background: isSelected ? '#eff6ff' : '#fff',
+                                        color: isSelected ? '#1d4ed8' : '#374151',
+                                        fontWeight: isSelected ? 700 : 400,
+                                        fontSize: 13,
+                                        cursor: 'pointer',
+                                        transition: 'all 0.15s',
+                                      }}
+                                    >
+                                      {opt.name}
+                                      <span style={{ marginLeft: 6, fontSize: 11, color: isSelected ? '#3b82f6' : '#9ca3af' }}>
+                                        {opt.marks} pts
+                                      </span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                              {!selectedOptions[rubric.criterion] && (
+                                <div className="small text-muted mt-1">Select an option</div>
+                              )}
                             </Form.Group>
                           ))}
                         </div>
@@ -274,7 +328,7 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
                             onClick={() => feedbackMut.mutate(status)}
                             disabled={feedbackMut.isPending}
                           >
-                            {feedbackMut.isPending && feedbackMut.variables === status
+                            {feedbackMut.isPending && feedbackMut.variables === status as string
                               ? <Spinner animation="border" size="sm" screenReaderText="Saving" />
                               : label}
                           </Button>
@@ -311,6 +365,19 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
                       v{v.version_number}{v.created ? ` · ${new Date(v.created).toLocaleString()}` : ''}
                     </small>
                   </div>
+                  {v.rubrics?.length > 0 && (
+                    <div className="mt-1 mb-2">
+                      {v.rubrics.map((r: RubricFeedbackEntry, ri: number) => (
+                        <div key={ri} className="d-flex justify-content-between small py-1" style={{ borderBottom: '1px solid #e9ecef' }}>
+                          <span>{r.criterion}</span>
+                          <span>
+                            <strong>{r.selected_option}</strong>
+                            {r.marks != null && <span className="text-muted ml-1">({r.marks} pts)</span>}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   {v.comment ? (
                     <p className="small mb-0" style={{ whiteSpace: 'pre-wrap' }}>{v.comment}</p>
                   ) : (

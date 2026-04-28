@@ -11,9 +11,10 @@ interface Props {
   onEdit: (template: Template) => void;
   onCreate: () => void;
   onManageTypes: () => void;
+  onManageRubrics: () => void;
 }
 
-export const AdminTemplateList: React.FC<Props> = ({ onEdit, onCreate, onManageTypes }) => {
+export const AdminTemplateList: React.FC<Props> = ({ onEdit, onCreate, onManageTypes, onManageRubrics }) => {
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
@@ -92,6 +93,10 @@ export const AdminTemplateList: React.FC<Props> = ({ onEdit, onCreate, onManageT
 
             <Button variant="tertiary" size="sm" onClick={onManageTypes}>
               Manage Types
+            </Button>
+
+            <Button variant="tertiary" size="sm" onClick={onManageRubrics}>
+              Manage Rubrics
             </Button>
 
             <Button variant="primary" size="sm" iconBefore={Add} onClick={onCreate}>

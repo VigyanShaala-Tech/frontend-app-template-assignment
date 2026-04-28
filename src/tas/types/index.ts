@@ -90,9 +90,41 @@ export interface BlockTemplatesResponse {
 
 export type SubmissionStatus = 'draft' | 'submitted' | 'rejected' | 'approved';
 
+// ─── Rubrics ──────────────────────────────────────────────────────────────────
+
+export interface RubricOption {
+  name: string;
+  marks: number;
+}
+
+export interface RubricCriterion {
+  criterion: string;
+  options: RubricOption[];
+}
+
+export interface Rubric {
+  id: string;
+  name: string;
+  criteria: RubricCriterion[];
+  is_active: boolean;
+}
+
+export interface BlockRubricsResponse {
+  display_name: string;
+  instructions: string;
+  rubrics: RubricCriterion[];
+}
+
+export interface RubricFeedbackEntry {
+  criterion: string;
+  selected_option: string;
+  marks: number;
+}
+
 export interface SubmissionFeedback {
   status: 'pending' | 'approved' | 'rejected';
   comment: string;
+  rubrics?: RubricFeedbackEntry[];
 }
 
 export interface Submission {
