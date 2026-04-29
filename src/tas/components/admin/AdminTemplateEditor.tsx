@@ -281,8 +281,8 @@ const DraggableOverlay: React.FC<DraggableOverlayProps> = ({
       const { sx, sy, ow, oh, rw: w, rh: h } = resizeRef.current;
       onPositionChange({
         ...position,
-        width:  Math.max(3, Math.min(100 - position.x, ow + ((ev.clientX - sx) / w) * 100)),
-        height: Math.max(2, Math.min(100 - position.y, oh + ((ev.clientY - sy) / h) * 100)),
+        width:  Math.max(0.5, Math.min(100 - position.x, ow + ((ev.clientX - sx) / w) * 100)),
+        height: Math.max(0.5, Math.min(100 - position.y, oh + ((ev.clientY - sy) / h) * 100)),
       });
     };
     const onUp = () => {
@@ -374,6 +374,8 @@ export const AdminTemplateEditor: React.FC<Props> = ({ template, onBack }) => {
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   const canvasRef = useRef<HTMLDivElement>(null);
+  const drawRef = useRef<{ sx: number; sy: number; rect: DOMRect } | null>(null);
+  const [drawPreview, setDrawPreview] = useState<FieldPosition | null>(null);
   const imageNaturalW = template?.image_width || 794;
   const imageNaturalH = template?.image_height || 1123;
 
@@ -408,6 +410,48 @@ export const AdminTemplateEditor: React.FC<Props> = ({ template, onBack }) => {
 
   const updatePosition = useCallback((id: string, pos: FieldPosition) => {
     setPositions((prev) => ({ ...prev, [id]: pos }));
+  }, []);
+
+  const handleCanvasMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.button !== 2) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = canvasRef.current!.getBoundingClientRect();
+    drawRef.current = { sx: e.clientX, sy: e.clientY, rect };
+    setDrawPreview({ x: ((e.clientX - rect.left) / rect.width) * 100, y: ((e.clientY - rect.top) / rect.height) * 100, width: 0, height: 0 });
+
+    const onMove = (ev: MouseEvent) => {
+      if (!drawRef.current) return;
+      const { sx, sy, rect: r } = drawRef.current;
+      const x1 = Math.max(0, Math.min((sx - r.left) / r.width, 1)) * 100;
+      const y1 = Math.max(0, Math.min((sy - r.top) / r.height, 1)) * 100;
+      const x2 = Math.max(0, Math.min((ev.clientX - r.left) / r.width, 1)) * 100;
+      const y2 = Math.max(0, Math.min((ev.clientY - r.top) / r.height, 1)) * 100;
+      setDrawPreview({ x: Math.min(x1, x2), y: Math.min(y1, y2), width: Math.abs(x2 - x1), height: Math.abs(y2 - y1) });
+    };
+
+    const onUp = (ev: MouseEvent) => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      if (!drawRef.current) return;
+      const { sx, sy, rect: r } = drawRef.current;
+      drawRef.current = null;
+      setDrawPreview(null);
+      const x1 = Math.max(0, Math.min((sx - r.left) / r.width, 1)) * 100;
+      const y1 = Math.max(0, Math.min((sy - r.top) / r.height, 1)) * 100;
+      const x2 = Math.max(0, Math.min((ev.clientX - r.left) / r.width, 1)) * 100;
+      const y2 = Math.max(0, Math.min((ev.clientY - r.top) / r.height, 1)) * 100;
+      const w = Math.abs(x2 - x1);
+      const h = Math.abs(y2 - y1);
+      if (w < 0.5 || h < 0.5) return; // too small — ignore accidental right-clicks
+      const id = generateFieldId();
+      setFields((prev) => [...prev, { id, label: '', type: 'text', required: false }]);
+      setPositions((prev) => ({ ...prev, [id]: { x: Math.min(x1, x2), y: Math.min(y1, y2), width: w, height: h } }));
+      setSelectedFieldId(id);
+    };
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
   }, []);
 
   const reorderFields = useCallback((fromIdx: number, toIdx: number) => {
@@ -605,7 +649,7 @@ export const AdminTemplateEditor: React.FC<Props> = ({ template, onBack }) => {
 
         {/* Right panel: canvas */}
         <div className="flex-grow-1 position-relative overflow-hidden" style={{ background: '#e5e7eb' }}>
-          <TransformWrapper minScale={0.2} maxScale={4} limitToBounds={false} centerOnInit wheel={{ step: 0.08 }}>
+          <TransformWrapper minScale={0.2} maxScale={4} limitToBounds={false} centerOnInit wheel={{ disabled: true }} pinch={{ disabled: true }}>
             {({ zoomIn, zoomOut, resetTransform }) => (
               <>
                 {/* Zoom controls */}
@@ -627,6 +671,8 @@ export const AdminTemplateEditor: React.FC<Props> = ({ template, onBack }) => {
                     className="position-relative shadow"
                     style={{ width: imageNaturalW, height: imageNaturalH }}
                     onClick={() => setSelectedFieldId(null)}
+                    onMouseDown={handleCanvasMouseDown}
+                    onContextMenu={(e) => e.preventDefault()}
                   >
                     {imageUrl ? (
                       <img src={imageUrl} alt="template" className="position-absolute w-100 h-100" style={{ objectFit: 'contain', pointerEvents: 'none', userSelect: 'none' }} draggable={false} />
@@ -652,6 +698,20 @@ export const AdminTemplateEditor: React.FC<Props> = ({ template, onBack }) => {
                         />
                       );
                     })}
+
+                    {drawPreview && drawPreview.width > 0 && drawPreview.height > 0 && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          left: `${drawPreview.x}%`, top: `${drawPreview.y}%`,
+                          width: `${drawPreview.width}%`, height: `${drawPreview.height}%`,
+                          border: '2px dashed #2563eb',
+                          background: 'rgba(37,99,235,0.08)',
+                          pointerEvents: 'none',
+                          boxSizing: 'border-box',
+                        }}
+                      />
+                    )}
                   </div>
                 </TransformComponent>
               </>
@@ -659,7 +719,7 @@ export const AdminTemplateEditor: React.FC<Props> = ({ template, onBack }) => {
           </TransformWrapper>
 
           <div className="position-absolute small text-muted bg-white rounded shadow-sm px-3 py-2" style={{ bottom: 12, left: 12, pointerEvents: 'none' }}>
-            Drag to move · resize from bottom-right corner
+            Drag to move · resize from bottom-right · right-click drag to draw new field
           </div>
         </div>
       </div>

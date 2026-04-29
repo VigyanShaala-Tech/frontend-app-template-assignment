@@ -144,6 +144,8 @@ export const FieldOverlay: React.FC<FieldOverlayProps> = ({
             lineHeight: 1.3,
             fontSize: displayFontSize,
             padding: 2,
+            wordBreak: 'break-word',
+            whiteSpace: 'pre-wrap',
           }}
         >
           {fieldValue}

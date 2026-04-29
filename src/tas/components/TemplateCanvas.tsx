@@ -36,8 +36,8 @@ export const TemplateCanvas: React.FC<Props> = ({ template, readOnly = false }) 
         maxScale={5}
         limitToBounds={false}
         centerOnInit
-        wheel={{ step: 0.08 }}
-        pinch={{ step: 5 }}
+        wheel={{ disabled: true }}
+        pinch={{ disabled: true }}
         onTransformed={(ref) => {
           setCanvasState({
             scale: ref.state.scale,
