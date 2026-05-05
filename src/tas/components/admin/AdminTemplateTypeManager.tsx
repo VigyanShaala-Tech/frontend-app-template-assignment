@@ -77,9 +77,16 @@ export const AdminTemplateTypeManager: React.FC<Props> = ({ onBack }) => {
 
   const handleSubmit = () => {
     if (!form.name.trim()) { setError('Name is required.'); return; }
-    if (!form.slug.trim()) { setError('Slug is required.'); return; }
     setError('');
-    const body = { name: form.name.trim(), slug: form.slug.trim(), description: form.description.trim(), is_active: true };
+    const name = form.name.trim();
+    const slug = (editingId ? form.slug : toSlug(name)).trim();
+    if (!slug) { setError('Name must contain letters or numbers.'); return; }
+    const body = {
+      name,
+      slug,
+      description: form.description.trim(),
+      is_active: true,
+    };
     if (editingId) {
       updateMut.mutate({ id: editingId, body });
     } else {
@@ -131,17 +138,6 @@ export const AdminTemplateTypeManager: React.FC<Props> = ({ onBack }) => {
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleNameChange(e.target.value)}
               placeholder="e.g. Lab Report"
             />
-          </Form.Group>
-
-          <Form.Group controlId="tt-slug" className="mb-3">
-            <Form.Label>Slug <span className="text-danger">*</span></Form.Label>
-            <Form.Control
-              size="sm"
-              value={form.slug}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm((p) => ({ ...p, slug: e.target.value }))}
-              placeholder="e.g. lab-report"
-            />
-            <Form.Text muted>URL-safe identifier, auto-generated from name</Form.Text>
           </Form.Group>
 
           <Form.Group controlId="tt-desc" className="mb-4">
@@ -205,10 +201,11 @@ export const AdminTemplateTypeManager: React.FC<Props> = ({ onBack }) => {
                       {tt.is_active ? 'Active' : 'Inactive'}
                     </Badge>
                   </div>
-                  <div className="text-muted" style={{ fontSize: 11 }}>
-                    slug: <code>{tt.slug}</code>
-                    {tt.description && <> &nbsp;·&nbsp; {tt.description}</>}
-                  </div>
+                  {tt.description && (
+                    <div className="text-muted" style={{ fontSize: 11 }}>
+                      {tt.description}
+                    </div>
+                  )}
                 </div>
 
                 <Button
