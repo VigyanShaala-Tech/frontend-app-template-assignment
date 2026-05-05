@@ -44,7 +44,9 @@ export const AdminTemplateList: React.FC<Props> = ({ onEdit, onCreate, onManageT
 
   const filtered = (data?.results ?? []).filter((t) => {
     const matchesSearch = t.name.toLowerCase().includes(search.toLowerCase());
-    const matchesType = !typeFilter || t.template_type?.id === typeFilter;
+    // Some rows may not include template_type detail; normalize id comparison.
+    const templateTypeId = t.template_type?.id ?? t.template_type_id;
+    const matchesType = !typeFilter || String(templateTypeId ?? '') === String(typeFilter);
     return matchesSearch && matchesType;
   });
 
