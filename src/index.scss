@@ -13,5 +13,5 @@
 
 // Smooth border animation for field overlays
 [class*="FieldOverlay"] {
-  transition: border-color 0.15s ease, background-color 0.15s ease;
+  transition: border-color .15s ease, background-color .15s ease;
 }
