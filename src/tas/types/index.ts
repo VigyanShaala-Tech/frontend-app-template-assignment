@@ -28,15 +28,15 @@ export interface FormField {
   required: boolean;
   options?: string[];
   placeholder?: string;
-  fontSize?: number;      // default font size in px (default 14)
-  maxChars?: number;      // max character limit (default 60)
+  fontSize?: number; // default font size in px (default 14)
+  maxChars?: number; // max character limit (default 60)
 }
 
 export interface FieldPosition {
-  x: number;       // 0–100 %
-  y: number;       // 0–100 %
-  width: number;   // 0–100 %
-  height: number;  // 0–100 %
+  x: number; // 0–100 %
+  y: number; // 0–100 %
+  width: number; // 0–100 %
+  height: number; // 0–100 %
 }
 
 // ─── Template (tas_templates) ─────────────────────────────────────────────────

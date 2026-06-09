@@ -35,6 +35,27 @@ const FEEDBACK_BADGE: Record<string, string> = {
   rejected: 'danger',
 };
 
+const FEEDBACK_BORDER: Record<string, string> = {
+  rejected: '#dc3545',
+  approved: '#28a745',
+  pending: '#6c757d',
+};
+
+const thStyle: React.CSSProperties = {
+  padding: '10px 16px',
+  textAlign: 'left',
+  fontSize: '0.78rem',
+  fontWeight: 700,
+  textTransform: 'uppercase',
+  letterSpacing: '0.05em',
+  color: '#6b7280',
+};
+
+const tdStyle: React.CSSProperties = {
+  padding: '12px 16px',
+  verticalAlign: 'middle',
+};
+
 export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack }) => {
   const { mfeContext } = useTasStore();
   const usageKey = mfeContext?.usageKey ?? '';
@@ -65,19 +86,16 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
     enabled: !!templateId,
   });
 
-
   const feedbackMut = useMutation({
     mutationFn: (payload: {
       feedbackStatus: 'approved' | 'rejected';
       rubricPayload: RubricFeedbackEntry[];
       total: number;
-    }) => {
-      return adminSubmissionsApi.submitFeedback(submissionId, {
-        comment,
-        rubrics: payload.rubricPayload,
-        status: payload.feedbackStatus,
-      });
-    },
+    }) => adminSubmissionsApi.submitFeedback(submissionId, {
+      comment,
+      rubrics: payload.rubricPayload,
+      status: payload.feedbackStatus,
+    }),
     onSuccess: () => {
       setFeedbackSaved(true);
       queryClient.invalidateQueries({ queryKey: ['admin-submission-detail', submissionId] });
@@ -189,7 +207,7 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
           Back
         </Button>
         <div className="flex-grow-1">
-          <h2 className="h5 mb-0">{submission.username}'s Submission</h2>
+          <h2 className="h5 mb-0">{submission.username}{'\'s Submission'}</h2>
           <small className="text-muted">
             {submission.submission_date
               ? new Date(submission.submission_date).toLocaleString()
@@ -215,7 +233,9 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
                   <iframe
                     src={submission.pdf}
                     title="Student submission PDF"
-                    style={{ width: '100%', height: 600, border: 'none', display: 'block' }}
+                    style={{
+                      width: '100%', height: 600, border: 'none', display: 'block',
+                    }}
                   />
                   <div className="px-3 py-2 border-top" style={{ background: '#f8f9fa' }}>
                     <button
@@ -235,10 +255,17 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
                         }
                       }}
                       style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 6,
-                        padding: '6px 14px', background: '#2563eb', color: '#fff',
-                        border: 'none', borderRadius: 6, fontWeight: 600,
-                        fontSize: 13, cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        padding: '6px 14px',
+                        background: '#2563eb',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: 6,
+                        fontWeight: 600,
+                        fontSize: 13,
+                        cursor: 'pointer',
                       }}
                     >
                       ↓ Download PDF
@@ -285,8 +312,8 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
                     </Badge>
                     {submission.feedback.rubrics?.length > 0 && (
                       <div className="mt-2 mb-2">
-                        {submission.feedback.rubrics.map((r: RubricFeedbackEntry, i: number) => (
-                          <div key={i} className="d-flex justify-content-between small py-1" style={{ borderBottom: '1px solid #e9ecef' }}>
+                        {submission.feedback.rubrics.map((r: RubricFeedbackEntry) => (
+                          <div key={r.criterion} className="d-flex justify-content-between small py-1" style={{ borderBottom: '1px solid #e9ecef' }}>
                             <span>{r.criterion}</span>
                             <span>
                               <strong>{r.score ?? r.marks ?? '—'}</strong>
@@ -326,7 +353,7 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
                         <div className="mb-4">
                           <p className="font-weight-bold small mb-2">Rubric Scores</p>
                           {rubricList.map((rubric, idx) => (
-                            <Form.Group key={idx} className="mb-4">
+                            <Form.Group key={rubric.criterion || `criterion-${idx + 1}`} className="mb-4">
                               <Form.Label className="small font-weight-bold d-block mb-2">
                                 {rubric.criterion || `Criterion ${idx + 1}`}
                               </Form.Label>
@@ -412,7 +439,7 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
                 <div
                   key={v.version_number}
                   className="mb-3 p-3 rounded"
-                  style={{ background: '#f8f9fa', borderLeft: `3px solid ${v.status === 'rejected' ? '#dc3545' : v.status === 'approved' ? '#28a745' : '#6c757d'}` }}
+                  style={{ background: '#f8f9fa', borderLeft: `3px solid ${FEEDBACK_BORDER[v.status] ?? '#6c757d'}` }}
                 >
                   <div className="d-flex align-items-center mb-1" style={{ gap: '0.5rem' }}>
                     <Badge variant={FEEDBACK_BADGE[v.status] ?? 'secondary'}>
@@ -424,8 +451,8 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
                   </div>
                   {v.rubrics?.length > 0 && (
                     <div className="mt-1 mb-2">
-                      {v.rubrics.map((r: RubricFeedbackEntry, ri: number) => (
-                        <div key={ri} className="d-flex justify-content-between small py-1" style={{ borderBottom: '1px solid #e9ecef' }}>
+                      {v.rubrics.map((r: RubricFeedbackEntry) => (
+                        <div key={`${v.version_number}-${r.criterion}`} className="d-flex justify-content-between small py-1" style={{ borderBottom: '1px solid #e9ecef' }}>
                           <span>{r.criterion}</span>
                           <span>
                             <strong>{r.score ?? r.marks ?? '—'}</strong>
@@ -489,9 +516,14 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
                               }
                             }}
                             style={{
-                              padding: '4px 10px', fontSize: 12, fontWeight: 600,
-                              background: '#2563eb', color: '#fff', border: 'none',
-                              borderRadius: 6, cursor: 'pointer',
+                              padding: '4px 10px',
+                              fontSize: 12,
+                              fontWeight: 600,
+                              background: '#2563eb',
+                              color: '#fff',
+                              border: 'none',
+                              borderRadius: 6,
+                              cursor: 'pointer',
                             }}
                           >
                             ↓ PDF
@@ -510,19 +542,4 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
       </div>
     </div>
   );
-};
-
-const thStyle: React.CSSProperties = {
-  padding: '10px 16px',
-  textAlign: 'left',
-  fontSize: '0.78rem',
-  fontWeight: 700,
-  textTransform: 'uppercase',
-  letterSpacing: '0.05em',
-  color: '#6b7280',
-};
-
-const tdStyle: React.CSSProperties = {
-  padding: '12px 16px',
-  verticalAlign: 'middle',
 };
