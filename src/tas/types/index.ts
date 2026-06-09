@@ -119,12 +119,14 @@ export interface RubricFeedbackEntry {
   criterion: string;
   selected_option: string;
   marks: number;
+  score: number | null;
 }
 
 export interface SubmissionFeedback {
   status: 'pending' | 'approved' | 'rejected';
   comment: string;
   rubrics?: RubricFeedbackEntry[];
+  total?: number;
 }
 
 export interface Submission {
