@@ -35,14 +35,36 @@ const FEEDBACK_BADGE: Record<string, string> = {
   rejected: 'danger',
 };
 
+const FEEDBACK_BORDER: Record<string, string> = {
+  rejected: '#dc3545',
+  approved: '#28a745',
+  pending: '#6c757d',
+};
+
+const thStyle: React.CSSProperties = {
+  padding: '10px 16px',
+  textAlign: 'left',
+  fontSize: '0.78rem',
+  fontWeight: 700,
+  textTransform: 'uppercase',
+  letterSpacing: '0.05em',
+  color: '#6b7280',
+};
+
+const tdStyle: React.CSSProperties = {
+  padding: '12px 16px',
+  verticalAlign: 'middle',
+};
+
 export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack }) => {
   const { mfeContext } = useTasStore();
   const usageKey = mfeContext?.usageKey ?? '';
   const queryClient = useQueryClient();
 
   const [comment, setComment] = useState('');
-  // Maps criterion name → selected option name
-  const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
+  // Maps criterion name -> raw input value (empty string means null score)
+  const [scoreInputs, setScoreInputs] = useState<Record<string, string>>({});
+  const [scoreErrors, setScoreErrors] = useState<Record<string, string>>({});
   const [feedbackSaved, setFeedbackSaved] = useState(false);
 
   const { data: submission, isLoading: loadingSub } = useQuery({
@@ -64,23 +86,16 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
     enabled: !!templateId,
   });
 
-
   const feedbackMut = useMutation({
-    mutationFn: (feedbackStatus: 'approved' | 'rejected') => {
-      const rubricList: RubricCriterion[] = rubrics?.rubrics ?? [];
-      const rubricPayload: RubricFeedbackEntry[] = rubricList
-        .filter((c) => selectedOptions[c.criterion])
-        .map((c) => {
-          const optionName = selectedOptions[c.criterion];
-          const option = c.options.find((o) => o.name === optionName);
-          return { criterion: c.criterion, selected_option: optionName, marks: option?.marks ?? 0 };
-        });
-      return adminSubmissionsApi.submitFeedback(submissionId, {
-        comment,
-        rubrics: rubricPayload,
-        status: feedbackStatus,
-      });
-    },
+    mutationFn: (payload: {
+      feedbackStatus: 'approved' | 'rejected';
+      rubricPayload: RubricFeedbackEntry[];
+      total: number;
+    }) => adminSubmissionsApi.submitFeedback(submissionId, {
+      comment,
+      rubrics: payload.rubricPayload,
+      status: payload.feedbackStatus,
+    }),
     onSuccess: () => {
       setFeedbackSaved(true);
       queryClient.invalidateQueries({ queryKey: ['admin-submission-detail', submissionId] });
@@ -108,6 +123,75 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
   }
 
   const rubricList: RubricCriterion[] = rubrics?.rubrics ?? [];
+  const parseScoreInput = (rawInput: string): number | null => {
+    const trimmed = rawInput.trim();
+    if (trimmed === '') {
+      return null;
+    }
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? parsed : Number.NaN;
+  };
+
+  const validateScores = () => {
+    const nextErrors: Record<string, string> = {};
+    const rubricPayload: RubricFeedbackEntry[] = [];
+    let total = 0;
+
+    rubricList.forEach((rubric) => {
+      const parsed = parseScoreInput(scoreInputs[rubric.criterion] ?? '');
+      if (parsed === null) {
+        nextErrors[rubric.criterion] = 'Score is required.';
+        return;
+      }
+      if (Number.isNaN(parsed)) {
+        nextErrors[rubric.criterion] = 'Enter a valid number.';
+        return;
+      }
+      if (parsed > 10) {
+        nextErrors[rubric.criterion] = 'Score cannot be greater than 10.';
+        return;
+      }
+      if (parsed < 0) {
+        nextErrors[rubric.criterion] = 'Score cannot be less than 0.';
+        return;
+      }
+      total += parsed;
+      rubricPayload.push({
+        criterion: rubric.criterion,
+        selected_option: `Score: ${parsed}`,
+        marks: parsed,
+        score: parsed,
+      });
+    });
+
+    setScoreErrors(nextErrors);
+    return {
+      hasErrors: Object.keys(nextErrors).length > 0,
+      rubricPayload,
+      total,
+    };
+  };
+
+  const totalScore = rubricList.reduce((sum, rubric) => {
+    const parsed = parseScoreInput(scoreInputs[rubric.criterion] ?? '');
+    if (parsed === null || Number.isNaN(parsed) || parsed > 10 || parsed < 0) {
+      return sum;
+    }
+    return sum + parsed;
+  }, 0);
+
+  const hasAllValidScores = rubricList.length > 0 && rubricList.every((rubric) => {
+    const parsed = parseScoreInput(scoreInputs[rubric.criterion] ?? '');
+    return parsed !== null && !Number.isNaN(parsed) && parsed >= 0 && parsed <= 10;
+  });
+
+  const handleFeedbackSubmit = (feedbackStatus: 'approved' | 'rejected') => {
+    const { hasErrors, rubricPayload, total } = validateScores();
+    if (hasErrors) {
+      return;
+    }
+    feedbackMut.mutate({ feedbackStatus, rubricPayload, total });
+  };
   // Build field_id → label: prefer backend-provided map, fall back to fetched template fields
   const fieldLabels: Record<string, string> = submission.template_fields
     ?? Object.fromEntries((templateDetail?.fields ?? []).map((f) => [f.id, f.label]));
@@ -123,7 +207,7 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
           Back
         </Button>
         <div className="flex-grow-1">
-          <h2 className="h5 mb-0">{submission.username}'s Submission</h2>
+          <h2 className="h5 mb-0">{submission.username}{'\'s Submission'}</h2>
           <small className="text-muted">
             {submission.submission_date
               ? new Date(submission.submission_date).toLocaleString()
@@ -149,7 +233,9 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
                   <iframe
                     src={submission.pdf}
                     title="Student submission PDF"
-                    style={{ width: '100%', height: 600, border: 'none', display: 'block' }}
+                    style={{
+                      width: '100%', height: 600, border: 'none', display: 'block',
+                    }}
                   />
                   <div className="px-3 py-2 border-top" style={{ background: '#f8f9fa' }}>
                     <button
@@ -169,10 +255,17 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
                         }
                       }}
                       style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 6,
-                        padding: '6px 14px', background: '#2563eb', color: '#fff',
-                        border: 'none', borderRadius: 6, fontWeight: 600,
-                        fontSize: 13, cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        padding: '6px 14px',
+                        background: '#2563eb',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: 6,
+                        fontWeight: 600,
+                        fontSize: 13,
+                        cursor: 'pointer',
                       }}
                     >
                       ↓ Download PDF
@@ -219,13 +312,13 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
                     </Badge>
                     {submission.feedback.rubrics?.length > 0 && (
                       <div className="mt-2 mb-2">
-                        {submission.feedback.rubrics.map((r: RubricFeedbackEntry, i: number) => (
-                          <div key={i} className="d-flex justify-content-between small py-1" style={{ borderBottom: '1px solid #e9ecef' }}>
+                        {submission.feedback.rubrics.map((r: RubricFeedbackEntry) => (
+                          <div key={r.criterion} className="d-flex justify-content-between small py-1" style={{ borderBottom: '1px solid #e9ecef' }}>
                             <span>{r.criterion}</span>
                             <span>
-                              <strong>{r.selected_option}</strong>
-                              {r.marks != null && (
-                                <span className="text-muted ml-1">({r.marks} pts)</span>
+                              <strong>{r.score ?? r.marks ?? '—'}</strong>
+                              {(r.score != null || r.marks != null) && (
+                                <span className="text-muted ml-1">pts</span>
                               )}
                             </span>
                           </div>
@@ -260,46 +353,37 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
                         <div className="mb-4">
                           <p className="font-weight-bold small mb-2">Rubric Scores</p>
                           {rubricList.map((rubric, idx) => (
-                            <Form.Group key={idx} className="mb-4">
+                            <Form.Group key={rubric.criterion || `criterion-${idx + 1}`} className="mb-4">
                               <Form.Label className="small font-weight-bold d-block mb-2">
                                 {rubric.criterion || `Criterion ${idx + 1}`}
                               </Form.Label>
-                              <div className="d-flex flex-wrap" style={{ gap: '0.5rem' }}>
-                                {rubric.options.map((opt) => {
-                                  const isSelected = selectedOptions[rubric.criterion] === opt.name;
-                                  return (
-                                    <button
-                                      key={opt.name}
-                                      type="button"
-                                      onClick={() => setSelectedOptions((prev) => ({
-                                        ...prev,
-                                        [rubric.criterion]: opt.name,
-                                      }))}
-                                      style={{
-                                        padding: '6px 14px',
-                                        borderRadius: 6,
-                                        border: `2px solid ${isSelected ? '#2563eb' : '#dee2e6'}`,
-                                        background: isSelected ? '#eff6ff' : '#fff',
-                                        color: isSelected ? '#1d4ed8' : '#374151',
-                                        fontWeight: isSelected ? 700 : 400,
-                                        fontSize: 13,
-                                        cursor: 'pointer',
-                                        transition: 'all 0.15s',
-                                      }}
-                                    >
-                                      {opt.name}
-                                      <span style={{ marginLeft: 6, fontSize: 11, color: isSelected ? '#3b82f6' : '#9ca3af' }}>
-                                        {opt.marks} pts
-                                      </span>
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                              {!selectedOptions[rubric.criterion] && (
-                                <div className="small text-muted mt-1">Select an option</div>
+                              <Form.Control
+                                type="number"
+                                min={0}
+                                max={10}
+                                step="any"
+                                value={scoreInputs[rubric.criterion] ?? ''}
+                                placeholder="Enter score (0-10)"
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                  const nextValue = e.target.value;
+                                  setScoreInputs((prev) => ({
+                                    ...prev,
+                                    [rubric.criterion]: nextValue,
+                                  }));
+                                }}
+                                isInvalid={Boolean(scoreErrors[rubric.criterion])}
+                              />
+                              {scoreErrors[rubric.criterion] ? (
+                                <div className="small text-danger mt-1">{scoreErrors[rubric.criterion]}</div>
+                              ) : (
+                                <div className="small text-muted mt-1">Enter a value from 0 to 10</div>
                               )}
                             </Form.Group>
                           ))}
+                          <div className="d-flex justify-content-between align-items-center border-top pt-2">
+                            <span className="small font-weight-bold">Total Score</span>
+                            <span className="font-weight-bold">{hasAllValidScores ? totalScore : '—'}</span>
+                          </div>
                         </div>
                       )}
 
@@ -325,10 +409,10 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
                           <Button
                             key={status}
                             variant={variant}
-                            onClick={() => feedbackMut.mutate(status)}
+                            onClick={() => handleFeedbackSubmit(status)}
                             disabled={feedbackMut.isPending}
                           >
-                            {feedbackMut.isPending && feedbackMut.variables === status as string
+                            {feedbackMut.isPending && feedbackMut.variables?.feedbackStatus === status
                               ? <Spinner animation="border" size="sm" screenReaderText="Saving" />
                               : label}
                           </Button>
@@ -355,7 +439,7 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
                 <div
                   key={v.version_number}
                   className="mb-3 p-3 rounded"
-                  style={{ background: '#f8f9fa', borderLeft: `3px solid ${v.status === 'rejected' ? '#dc3545' : v.status === 'approved' ? '#28a745' : '#6c757d'}` }}
+                  style={{ background: '#f8f9fa', borderLeft: `3px solid ${FEEDBACK_BORDER[v.status] ?? '#6c757d'}` }}
                 >
                   <div className="d-flex align-items-center mb-1" style={{ gap: '0.5rem' }}>
                     <Badge variant={FEEDBACK_BADGE[v.status] ?? 'secondary'}>
@@ -367,12 +451,12 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
                   </div>
                   {v.rubrics?.length > 0 && (
                     <div className="mt-1 mb-2">
-                      {v.rubrics.map((r: RubricFeedbackEntry, ri: number) => (
-                        <div key={ri} className="d-flex justify-content-between small py-1" style={{ borderBottom: '1px solid #e9ecef' }}>
+                      {v.rubrics.map((r: RubricFeedbackEntry) => (
+                        <div key={`${v.version_number}-${r.criterion}`} className="d-flex justify-content-between small py-1" style={{ borderBottom: '1px solid #e9ecef' }}>
                           <span>{r.criterion}</span>
                           <span>
-                            <strong>{r.selected_option}</strong>
-                            {r.marks != null && <span className="text-muted ml-1">({r.marks} pts)</span>}
+                            <strong>{r.score ?? r.marks ?? '—'}</strong>
+                            {(r.score != null || r.marks != null) && <span className="text-muted ml-1">pts</span>}
                           </span>
                         </div>
                       ))}
@@ -432,9 +516,14 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
                               }
                             }}
                             style={{
-                              padding: '4px 10px', fontSize: 12, fontWeight: 600,
-                              background: '#2563eb', color: '#fff', border: 'none',
-                              borderRadius: 6, cursor: 'pointer',
+                              padding: '4px 10px',
+                              fontSize: 12,
+                              fontWeight: 600,
+                              background: '#2563eb',
+                              color: '#fff',
+                              border: 'none',
+                              borderRadius: 6,
+                              cursor: 'pointer',
                             }}
                           >
                             ↓ PDF
@@ -453,19 +542,4 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
       </div>
     </div>
   );
-};
-
-const thStyle: React.CSSProperties = {
-  padding: '10px 16px',
-  textAlign: 'left',
-  fontSize: '0.78rem',
-  fontWeight: 700,
-  textTransform: 'uppercase',
-  letterSpacing: '0.05em',
-  color: '#6b7280',
-};
-
-const tdStyle: React.CSSProperties = {
-  padding: '12px 16px',
-  verticalAlign: 'middle',
 };
