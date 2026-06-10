@@ -35,6 +35,8 @@ const FEEDBACK_BADGE: Record<string, string> = {
   rejected: 'danger',
 };
 
+export const COMMENT_SOFT_WARN_LENGTH = 50_000;
+
 const FEEDBACK_BORDER: Record<string, string> = {
   rejected: '#dc3545',
   approved: '#28a745',
@@ -396,6 +398,11 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
                           onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setComment(e.target.value)}
                           placeholder="Leave feedback for the student…"
                         />
+                        {comment.length >= COMMENT_SOFT_WARN_LENGTH && (
+                          <div className="small text-warning mt-1">
+                            This comment is very long (50,000+ characters). It will still be saved.
+                          </div>
+                        )}
                       </Form.Group>
 
                       {/* Approve / Reject buttons */}
