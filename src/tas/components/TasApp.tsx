@@ -15,6 +15,7 @@ import { TemplateSelector } from './TemplateSelector';
 import { TemplateCanvas } from './TemplateCanvas';
 import { FieldEditorPopup } from './FieldEditorPopup';
 import { PdfPoller } from './PdfPoller';
+import { StudentFeedbackPanel } from './StudentFeedbackPanel';
 import { useTasStore } from '../store/tasStore';
 import { submissionsApi } from '../services/api';
 
@@ -96,6 +97,33 @@ export const TasApp: React.FC = () => {
     }
   }, [selectedTemplate]);
 
+  // Refetch submission after student submit so instructor feedback appears without reload
+  useEffect(() => {
+    if (!submission?.id || submission.status === 'draft') return undefined;
+
+    let cancelled = false;
+    let intervalId: ReturnType<typeof setInterval> | undefined;
+
+    const refresh = () => {
+      submissionsApi.get(submission.id).then((updated) => {
+        if (!cancelled) setSubmission(updated);
+      }).catch(() => {});
+    };
+
+    refresh();
+    window.addEventListener('focus', refresh);
+
+    if (!submission.feedback) {
+      intervalId = setInterval(refresh, 30_000);
+    }
+
+    return () => {
+      cancelled = true;
+      if (intervalId) clearInterval(intervalId);
+      window.removeEventListener('focus', refresh);
+    };
+  }, [submission?.id, submission?.status, submission?.feedback, setSubmission]);
+
   // ── Print / Save as PDF ───────────────────────────────────────────────────
   const handlePrint = useCallback(() => {
     if (!selectedTemplate) return;
@@ -146,7 +174,7 @@ export const TasApp: React.FC = () => {
 
   // ── Save draft handler ─────────────────────────────────────────────────────
   const handleSaveDraft = useCallback(async () => {
-    if (!submission || submission.status === 'submitted') return;
+    if (!submission || submission.status !== 'draft') return;
     try {
       setIsSaving(true);
       const updated = await submissionsApi.patch(submission.id, formData);
@@ -161,7 +189,7 @@ export const TasApp: React.FC = () => {
 
   // ── Submit handler ─────────────────────────────────────────────────────────
   const handleSubmit = useCallback(async () => {
-    if (!submission || submission.status === 'submitted') return;
+    if (!submission || submission.status !== 'draft') return;
 
     const missing =
       selectedTemplate?.fields
@@ -206,7 +234,7 @@ export const TasApp: React.FC = () => {
     }
   }, [submission, selectedTemplate, formData, setIsSaving, setSubmission]);
 
-  const isSubmitted = submission?.status === 'submitted';
+  const isLocked = submission != null && submission.status !== 'draft';
 
   // ─── Render: no template selected → selector ──────────────────────────────
   if (!selectedTemplate) {
@@ -250,7 +278,7 @@ export const TasApp: React.FC = () => {
         minHeight: 52,
       }}>
         {/* Back */}
-        {!isSubmitted && (
+        {!isLocked && (
           <button
             type="button"
             onClick={() => {
@@ -279,7 +307,7 @@ export const TasApp: React.FC = () => {
         </span>
 
         {/* Preview toggle */}
-        {!isSubmitted && (
+        {!isLocked && (
           <button
             type="button"
             onClick={() => setPreviewMode(!isPreviewMode)}
@@ -299,7 +327,7 @@ export const TasApp: React.FC = () => {
         </button>
 
         {/* Save Draft */}
-        {!isSubmitted && (
+        {!isLocked && (
           <button
             type="button"
             onClick={handleSaveDraft}
@@ -317,7 +345,7 @@ export const TasApp: React.FC = () => {
         )}
 
         {/* Submit */}
-        {!isSubmitted && (
+        {!isLocked && (
           <button
             type="button"
             onClick={handleSubmit}
@@ -333,7 +361,7 @@ export const TasApp: React.FC = () => {
           </button>
         )}
 
-        {isSubmitted && (
+        {isLocked && (
           <span style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -366,15 +394,21 @@ export const TasApp: React.FC = () => {
           maxWidth: 900,
           margin: '0 auto',
         }}>
-          <TemplateCanvas template={selectedTemplate} readOnly={isSubmitted || isPreviewMode} />
+          <TemplateCanvas template={selectedTemplate} readOnly={isLocked || isPreviewMode} />
         </div>
+
+        {isLocked && submission?.feedback && (
+          <div style={{ maxWidth: 900, margin: '0 auto' }}>
+            <StudentFeedbackPanel feedback={submission.feedback} />
+          </div>
+        )}
       </div>
 
       {/* Field editor popup */}
-      {!isSubmitted && <FieldEditorPopup field={selectedField} fields={selectedTemplate.fields} />}
+      {!isLocked && <FieldEditorPopup field={selectedField} fields={selectedTemplate.fields} />}
 
       {/* PDF / submission status banner */}
-      {isSubmitted && (
+      {isLocked && (
         <div style={{ flexShrink: 0, padding: '0 16px 16px', background: '#fff', borderTop: '1px solid #e5e7eb' }}>
           <PdfPoller />
         </div>
