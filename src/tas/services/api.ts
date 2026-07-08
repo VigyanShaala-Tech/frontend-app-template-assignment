@@ -14,6 +14,8 @@ import type {
   RubricCriterion,
   BlockTemplatesResponse,
   BlockRubricsResponse,
+  BlockFeedbackOptionsResponse,
+  CategoryFeedbackConfig,
   RubricFeedbackEntry,
   Submission,
   SubmissionStatus,
@@ -339,5 +341,33 @@ export const adminSubmissionsApi = {
     payload: { rubrics?: RubricFeedbackEntry[]; comment?: string; status?: string },
   ): Promise<void> => {
     await http().post(`${tasBase()}/submissions/${submissionId}/feedback/`, payload);
+  },
+};
+
+// ─── Admin: Block feedback options (predefined comment snippets) ──────────────
+
+export const adminFeedbackApi = {
+  getOptions: async (usageKey: string): Promise<BlockFeedbackOptionsResponse> => {
+    const { data } = await http().get(
+      `${tasBase()}/block/${encodeURIComponent(usageKey)}/feedback-options/`,
+    );
+    return {
+      usage_key: data.usage_key ?? usageKey,
+      categories: data.categories ?? [],
+    };
+  },
+
+  setOptions: async (
+    usageKey: string,
+    categories: CategoryFeedbackConfig[],
+  ): Promise<BlockFeedbackOptionsResponse> => {
+    const { data } = await http().put(
+      `${tasBase()}/block/${encodeURIComponent(usageKey)}/feedback-options/`,
+      { categories },
+    );
+    return {
+      usage_key: data.usage_key ?? usageKey,
+      categories: data.categories ?? [],
+    };
   },
 };

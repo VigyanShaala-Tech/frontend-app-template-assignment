@@ -97,9 +97,17 @@ export interface RubricOption {
   marks: number;
 }
 
+/** Predefined feedback comment snippet (per assignment / rubric category). */
+export interface FeedbackOption {
+  id: string;
+  label: string;
+}
+
 export interface RubricCriterion {
   criterion: string;
   options: RubricOption[];
+  /** Comment snippets from block feedback-options config (reviewer UI). */
+  predefined_feedback?: FeedbackOption[];
 }
 
 export interface Rubric {
@@ -115,11 +123,25 @@ export interface BlockRubricsResponse {
   rubrics: RubricCriterion[];
 }
 
+/** Predefined feedback options for one rubric category (admin config). */
+export interface CategoryFeedbackConfig {
+  category_id: string;
+  options: FeedbackOption[];
+}
+
+/** GET/PUT payload for /block/{usage_key}/feedback-options/ */
+export interface BlockFeedbackOptionsResponse {
+  usage_key: string;
+  categories: CategoryFeedbackConfig[];
+}
+
 export interface RubricFeedbackEntry {
   criterion: string;
   selected_option: string;
   marks: number;
   score: number | null;
+  /** IDs from predefined_feedback selected by the reviewer. */
+  selected_options?: string[];
 }
 
 export interface SubmissionFeedback {
