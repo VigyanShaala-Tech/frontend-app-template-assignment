@@ -102,6 +102,16 @@ export interface RubricCriterion {
   options: RubricOption[];
 }
 
+export interface PredefinedFeedbackOption {
+  id: string;
+  label: string;
+}
+
+/** Rubric criterion with per-block predefined feedback options (from block rubrics API). */
+export interface RubricCriterionWithFeedback extends RubricCriterion {
+  predefined_feedback?: PredefinedFeedbackOption[];
+}
+
 export interface Rubric {
   id: string;
   name: string;
@@ -112,7 +122,7 @@ export interface Rubric {
 export interface BlockRubricsResponse {
   display_name: string;
   instructions: string;
-  rubrics: RubricCriterion[];
+  rubrics: RubricCriterionWithFeedback[];
 }
 
 export interface RubricFeedbackEntry {
@@ -120,6 +130,12 @@ export interface RubricFeedbackEntry {
   selected_option: string;
   marks: number;
   score: number | null;
+  /** IDs of selected predefined feedback options for this category. */
+  selected_options?: string[];
+  /** Denormalized labels for display (stored at submit time). */
+  selected_option_labels?: string[];
+  /** Per-category custom comment (distinct from overall SubmissionFeedback.comment). */
+  comment?: string;
 }
 
 export interface SubmissionFeedback {
