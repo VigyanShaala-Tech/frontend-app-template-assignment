@@ -7,7 +7,7 @@
  * - Always shows version history at the bottom
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 import {
@@ -68,8 +68,6 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
   const [scoreInputs, setScoreInputs] = useState<Record<string, string>>({});
   const [scoreErrors, setScoreErrors] = useState<Record<string, string>>({});
   const [feedbackSaved, setFeedbackSaved] = useState(false);
-  // Maps criterion name -> selected predefined feedback option IDs
-  const [selectedFeedback, setSelectedFeedback] = useState<Record<string, string[]>>({});
 
   const { data: submission, isLoading: loadingSub } = useQuery({
     queryKey: ['admin-submission-detail', submissionId],
@@ -80,15 +78,7 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
     queryKey: ['block-rubrics', usageKey],
     queryFn: () => adminSubmissionsApi.getRubrics(usageKey),
     enabled: !!usageKey,
-    // Keep open review form stable if admin changes config mid-review
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
   });
-
-  // Reset predefined-feedback selections only when assignment or submission changes
-  useEffect(() => {
-    setSelectedFeedback({});
-  }, [usageKey, submissionId]);
 
   // template_id comes from the backend once deployed; fall back to fetching by template_block_id
   const templateId = submission?.template_block_id ?? '';
@@ -173,7 +163,6 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
         selected_option: `Score: ${parsed}`,
         marks: parsed,
         score: parsed,
-        selected_options: selectedFeedback[rubric.criterion] ?? [],
       });
     });
 
@@ -205,17 +194,6 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
     }
     feedbackMut.mutate({ feedbackStatus, rubricPayload, total });
   };
-
-  const toggleFeedbackOption = (criterion: string, optionId: string) => {
-    setSelectedFeedback((prev) => {
-      const current = prev[criterion] ?? [];
-      const next = current.includes(optionId)
-        ? current.filter((id) => id !== optionId)
-        : [...current, optionId];
-      return { ...prev, [criterion]: next };
-    });
-  };
-
   // Build field_id → label: prefer backend-provided map, fall back to fetched template fields
   const fieldLabels: Record<string, string> = submission.template_fields
     ?? Object.fromEntries((templateDetail?.fields ?? []).map((f) => [f.id, f.label]));
@@ -402,39 +380,6 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
                               ) : (
                                 <div className="small text-muted mt-1">Enter a value from 0 to 10</div>
                               )}
-
-                              <div className="mt-3">
-                                <div className="small font-weight-bold mb-2">Predefined feedback</div>
-                                {(rubric.predefined_feedback ?? []).length === 0 ? (
-                                  <div className="small text-muted">No predefined feedback configured</div>
-                                ) : (
-                                  (rubric.predefined_feedback ?? []).map((opt) => {
-                                    const checked = (selectedFeedback[rubric.criterion] ?? []).includes(opt.id);
-                                    return (
-                                      <Form.Checkbox
-                                        key={opt.id}
-                                        checked={checked}
-                                        onChange={() => toggleFeedbackOption(rubric.criterion, opt.id)}
-                                        className="d-block mb-1"
-                                      >
-                                        <span
-                                          title={opt.label}
-                                          style={{
-                                            display: 'inline-block',
-                                            maxWidth: '100%',
-                                            overflow: 'hidden',
-                                            textOverflow: 'ellipsis',
-                                            whiteSpace: 'nowrap',
-                                            verticalAlign: 'bottom',
-                                          }}
-                                        >
-                                          {opt.label}
-                                        </span>
-                                      </Form.Checkbox>
-                                    );
-                                  })
-                                )}
-                              </div>
                             </Form.Group>
                           ))}
                           <div className="d-flex justify-content-between align-items-center border-top pt-2">
