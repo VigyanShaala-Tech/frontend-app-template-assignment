@@ -7,7 +7,7 @@
  * - Always shows version history at the bottom
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 import {
@@ -17,6 +17,8 @@ import { ArrowBack, CheckCircle } from '@openedx/paragon/icons';
 import { adminSubmissionsApi, templatesApi } from '../../services/api';
 import { useTasStore } from '../../store/tasStore';
 import type { RubricCriterion, RubricFeedbackEntry } from '../../types';
+import { normalizeFeedbacks, updateCategorySection } from '../../utils/instructorCommentSync';
+import { PredefinedFeedbackMultiSelect } from './PredefinedFeedbackMultiSelect';
 
 interface Props {
   submissionId: string;
@@ -67,7 +69,16 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
   // Maps criterion name -> raw input value (empty string means null score)
   const [scoreInputs, setScoreInputs] = useState<Record<string, string>>({});
   const [scoreErrors, setScoreErrors] = useState<Record<string, string>>({});
+  const [selectedFeedbacks, setSelectedFeedbacks] = useState<Record<string, string[]>>({});
   const [feedbackSaved, setFeedbackSaved] = useState(false);
+
+  useEffect(() => {
+    setComment('');
+    setScoreInputs({});
+    setScoreErrors({});
+    setSelectedFeedbacks({});
+    setFeedbackSaved(false);
+  }, [usageKey, submissionId]);
 
   const { data: submission, isLoading: loadingSub } = useQuery({
     queryKey: ['admin-submission-detail', submissionId],
@@ -78,6 +89,9 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
     queryKey: ['block-rubrics', usageKey],
     queryFn: () => adminSubmissionsApi.getRubrics(usageKey),
     enabled: !!usageKey,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
   });
 
   // template_id comes from the backend once deployed; fall back to fetching by template_block_id
@@ -125,6 +139,7 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
   }
 
   const rubricList: RubricCriterion[] = rubrics?.rubrics ?? [];
+  const categoryOrder = rubricList.map((rubric) => rubric.criterion);
   const parseScoreInput = (rawInput: string): number | null => {
     const trimmed = rawInput.trim();
     if (trimmed === '') {
@@ -353,35 +368,98 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
                     <>
                       {rubricList.length > 0 && (
                         <div className="mb-4">
-                          <p className="font-weight-bold small mb-2">Rubric Scores</p>
-                          {rubricList.map((rubric, idx) => (
-                            <Form.Group key={rubric.criterion || `criterion-${idx + 1}`} className="mb-4">
-                              <Form.Label className="small font-weight-bold d-block mb-2">
-                                {rubric.criterion || `Criterion ${idx + 1}`}
-                              </Form.Label>
-                              <Form.Control
-                                type="number"
-                                min={0}
-                                max={10}
-                                step="any"
-                                value={scoreInputs[rubric.criterion] ?? ''}
-                                placeholder="Enter score (0-10)"
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                                  const nextValue = e.target.value;
-                                  setScoreInputs((prev) => ({
-                                    ...prev,
-                                    [rubric.criterion]: nextValue,
-                                  }));
-                                }}
-                                isInvalid={Boolean(scoreErrors[rubric.criterion])}
-                              />
-                              {scoreErrors[rubric.criterion] ? (
-                                <div className="small text-danger mt-1">{scoreErrors[rubric.criterion]}</div>
-                              ) : (
-                                <div className="small text-muted mt-1">Enter a value from 0 to 10</div>
-                              )}
-                            </Form.Group>
-                          ))}
+                          {rubricList.map((rubric, idx) => {
+                            const categoryName = rubric.criterion || `Category ${idx + 1}`;
+                            const categoryKey = `${usageKey}-${categoryName}`;
+                            const feedbackOptions = normalizeFeedbacks(rubric.feedbacks);
+
+                            return (
+                              <div
+                                key={categoryKey}
+                                className="mb-4 pb-3"
+                                style={{ borderBottom: '1px solid #e9ecef' }}
+                              >
+                                <div className="d-flex justify-content-between align-items-center mb-2">
+                                  <span className="small font-weight-bold">{categoryName}</span>
+                                  <div style={{ width: 120 }}>
+                                    <Form.Control
+                                      type="number"
+                                      min={0}
+                                      max={10}
+                                      step="any"
+                                      value={scoreInputs[categoryName] ?? ''}
+                                      placeholder="Score"
+                                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                        const nextValue = e.target.value;
+                                        setScoreInputs((prev) => ({
+                                          ...prev,
+                                          [categoryName]: nextValue,
+                                        }));
+                                      }}
+                                      isInvalid={Boolean(scoreErrors[categoryName])}
+                                    />
+                                  </div>
+                                </div>
+                                {scoreErrors[categoryName] ? (
+                                  <div className="small text-danger mb-2">{scoreErrors[categoryName]}</div>
+                                ) : (
+                                  <div className="small text-muted mb-2">Enter a value from 0 to 10</div>
+                                )}
+
+                                <p className="small font-weight-bold mb-1 mt-3">Criteria Preview</p>
+                                <table
+                                  className="mb-3"
+                                  style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}
+                                >
+                                  <thead>
+                                    <tr style={{ borderBottom: '1px solid #dee2e6' }}>
+                                      <th style={{ ...thStyle, padding: '6px 8px' }}>Criteria</th>
+                                      <th style={{ ...thStyle, padding: '6px 8px', textAlign: 'right' }}>Marks</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {(rubric.options ?? []).map((option) => (
+                                      <tr key={`${categoryKey}-${option.name}`} style={{ borderBottom: '1px solid #f1f3f5' }}>
+                                        <td style={{ ...tdStyle, padding: '6px 8px' }}>{option.name}</td>
+                                        <td style={{ ...tdStyle, padding: '6px 8px', textAlign: 'right' }}>{option.marks}</td>
+                                      </tr>
+                                    ))}
+                                    {(rubric.options ?? []).length === 0 && (
+                                      <tr>
+                                        <td colSpan={2} style={{ ...tdStyle, padding: '6px 8px', color: '#6b7280' }}>
+                                          No criteria defined.
+                                        </td>
+                                      </tr>
+                                    )}
+                                  </tbody>
+                                </table>
+
+                                {feedbackOptions.length > 0 && (
+                                  <Form.Group className="mb-0">
+                                    <Form.Label className="small font-weight-bold">Predefined Feedback</Form.Label>
+                                    <PredefinedFeedbackMultiSelect
+                                      controlId={`${categoryKey}-feedback`}
+                                      options={feedbackOptions}
+                                      selected={selectedFeedbacks[categoryName] ?? []}
+                                      onChange={(nextSelected) => {
+                                        setSelectedFeedbacks((prev) => ({
+                                          ...prev,
+                                          [categoryName]: nextSelected,
+                                        }));
+                                        setComment((prev) => updateCategorySection(
+                                          prev,
+                                          categoryName,
+                                          categoryOrder,
+                                          nextSelected,
+                                          feedbackOptions,
+                                        ));
+                                      }}
+                                    />
+                                  </Form.Group>
+                                )}
+                              </div>
+                            );
+                          })}
                           <div className="d-flex justify-content-between align-items-center border-top pt-2">
                             <span className="small font-weight-bold">Total Score</span>
                             <span className="font-weight-bold">{hasAllValidScores ? totalScore : '—'}</span>
@@ -390,14 +468,15 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
                       )}
 
                       <Form.Group className="mb-3">
-                        <Form.Label className="small font-weight-bold">Comments</Form.Label>
+                        <Form.Label className="small font-weight-bold">Instructor Comment</Form.Label>
                         <Form.Control
                           as="textarea"
-                          rows={4}
+                          rows={6}
                           value={comment}
                           onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setComment(e.target.value)}
                           placeholder="Leave feedback for the student…"
                         />
+                        <div className="small text-muted mt-1">(Editable by the instructor)</div>
                         {comment.length >= COMMENT_SOFT_WARN_LENGTH && (
                           <div className="small text-warning mt-1">
                             This comment is very long (50,000+ characters). It will still be saved.

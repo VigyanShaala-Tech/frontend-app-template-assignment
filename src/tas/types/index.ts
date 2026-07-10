@@ -100,6 +100,7 @@ export interface RubricOption {
 export interface RubricCriterion {
   criterion: string;
   options: RubricOption[];
+  feedbacks?: string[];
 }
 
 export interface Rubric {
