@@ -111,10 +111,10 @@ export const AdminRubricManager: React.FC<Props> = ({ onBack }) => {
   const handleSubmit = () => {
     if (!form.name.trim()) { setError('Rubric name is required.'); return; }
     for (const [ci, c] of form.criteria.entries()) {
-      if (!c.criterion.trim()) { setError(`Criterion ${ci + 1} needs a name.`); return; }
-      if (c.options.length === 0) { setError(`Criterion "${c.criterion}" needs at least one option.`); return; }
+      if (!c.criterion.trim()) { setError(`Category ${ci + 1} needs a name.`); return; }
+      if (c.options.length === 0) { setError(`Category "${c.criterion}" needs at least one criteria.`); return; }
       for (const o of c.options) {
-        if (!o.name.trim()) { setError(`All options in "${c.criterion}" need a name.`); return; }
+        if (!o.name.trim()) { setError(`All criteria in "${c.criterion}" need a name.`); return; }
       }
     }
     setError('');
@@ -136,19 +136,18 @@ export const AdminRubricManager: React.FC<Props> = ({ onBack }) => {
   const rubrics = data?.results ?? [];
 
   return (
-    <div className="d-flex flex-column h-100">
-      {/* Header */}
-      <div className="d-flex align-items-center gap-3 px-4 py-3 bg-white border-bottom shadow-sm flex-shrink-0">
+    <div className="d-flex flex-column">
+      <div className="d-flex align-items-center mb-4 flex-wrap" style={{ gap: '0.5rem' }}>
         <Button variant="tertiary" size="sm" iconBefore={ArrowBack} onClick={onBack}>
           Templates
         </Button>
         <span className="text-muted">/</span>
-        <span className="font-weight-bold small flex-grow-1">Rubrics</span>
+        <h1 className="h3 mb-0">Rubrics</h1>
       </div>
 
-      <div className="d-flex flex-grow-1 overflow-hidden">
+      <div className="d-flex rounded border overflow-hidden bg-white" style={{ minHeight: '24rem' }}>
         {/* Left: form */}
-        <div className="overflow-auto bg-white border-right p-4" style={{ width: 380, flexShrink: 0 }}>
+        <div className="overflow-auto border-right p-4" style={{ width: 380, flexShrink: 0 }}>
           <h3 className="h6 mb-4">{editingId ? 'Edit Rubric' : 'New Rubric'}</h3>
 
           {error && <Alert variant="danger" className="mb-3 small">{error}</Alert>}
@@ -166,9 +165,9 @@ export const AdminRubricManager: React.FC<Props> = ({ onBack }) => {
           </Form.Group>
 
           <div className="mb-2 d-flex align-items-center justify-content-between">
-            <span className="small font-weight-bold">Criteria</span>
+            <span className="small font-weight-bold">Categories</span>
             <Button variant="tertiary" size="sm" iconBefore={Add} onClick={addCriterion}>
-              Add Criterion
+              Add Category
             </Button>
           </div>
 
@@ -185,7 +184,7 @@ export const AdminRubricManager: React.FC<Props> = ({ onBack }) => {
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                     setCriterionName(ci, e.target.value)
                   }
-                  placeholder={`Criterion ${ci + 1} name`}
+                  placeholder={`Category ${ci + 1} name`}
                   style={{ flex: 1 }}
                 />
                 {form.criteria.length > 1 && (
@@ -211,7 +210,7 @@ export const AdminRubricManager: React.FC<Props> = ({ onBack }) => {
                       onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                         setOptionField(ci, oi, 'name', e.target.value)
                       }
-                      placeholder="Option label"
+                      placeholder="Criteria label"
                       style={{ flex: 2 }}
                     />
                     <Form.Control
@@ -241,7 +240,7 @@ export const AdminRubricManager: React.FC<Props> = ({ onBack }) => {
               </div>
 
               <Button variant="tertiary" size="sm" iconBefore={Add} onClick={() => addOption(ci)}>
-                <span style={{ fontSize: 12 }}>Add Option</span>
+                <span style={{ fontSize: 12 }}>Add Criteria</span>
               </Button>
             </div>
           ))}

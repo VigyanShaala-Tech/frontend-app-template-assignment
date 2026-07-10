@@ -379,7 +379,7 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
                           {rubricList.map((rubric, idx) => (
                             <Form.Group key={rubric.criterion || `criterion-${idx + 1}`} className="mb-4">
                               <Form.Label className="small font-weight-bold d-block mb-2">
-                                {rubric.criterion || `Criterion ${idx + 1}`}
+                                {rubric.criterion || `Category ${idx + 1}`}
                               </Form.Label>
                               <Form.Control
                                 type="number"
