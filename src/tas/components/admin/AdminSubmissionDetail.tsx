@@ -60,6 +60,39 @@ const tdStyle: React.CSSProperties = {
   verticalAlign: 'middle',
 };
 
+const criteriaChipStyle: React.CSSProperties = {
+  display: 'inline-block',
+  padding: '6px 12px',
+  fontSize: '0.8125rem',
+  fontWeight: 500,
+  color: '#374151',
+  backgroundColor: '#f8f9fa',
+  border: '1px solid #dee2e6',
+  borderRadius: '6px',
+  lineHeight: 1.4,
+};
+
+const categoryDividerStyle: React.CSSProperties = {
+  borderTop: '1px solid #e9ecef',
+  margin: '1rem 0',
+};
+
+const categoryCardStyle: React.CSSProperties = {
+  border: '1px solid #ced4da',
+  borderRadius: '8px',
+  boxShadow: '0 1px 3px rgba(0, 0, 0, 0.06)',
+};
+
+const categoryFieldStyle: React.CSSProperties = {
+  border: '1px solid #00262b',
+  borderRadius: '0.25rem',
+  padding: '0 0.5rem',
+  boxSizing: 'border-box',
+};
+
+const categoryScoreInputWidth = 100;
+const categoryControlsGap = 12;
+
 export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack }) => {
   const { mfeContext } = useTasStore();
   const usageKey = mfeContext?.usageKey ?? '';
@@ -376,104 +409,145 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
                             const feedbackOptions = normalizeFeedbacks(rubric.feedbacks);
 
                             return (
-                              <div
-                                key={categoryKey}
-                                className="mb-4 pb-3"
-                                style={{ borderBottom: '1px solid #e9ecef' }}
-                              >
-                                <div className="d-flex justify-content-between align-items-center mb-2">
-                                  <span className="small font-weight-bold">{categoryName}</span>
-                                  <div style={{ width: 120 }}>
-                                    <Form.Control
-                                      type="number"
-                                      min={0}
-                                      max={10}
-                                      step="any"
-                                      value={scoreInputs[categoryName] ?? ''}
-                                      placeholder="Score"
-                                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                                        const nextValue = e.target.value;
-                                        setScoreInputs((prev) => ({
-                                          ...prev,
-                                          [categoryName]: nextValue,
-                                        }));
-                                      }}
-                                      isInvalid={Boolean(scoreErrors[categoryName])}
-                                    />
-                                  </div>
-                                </div>
-                                {scoreErrors[categoryName] ? (
-                                  <div className="small text-danger mb-2">{scoreErrors[categoryName]}</div>
-                                ) : (
-                                  <div className="small text-muted mb-2">Enter a value from 0 to 10</div>
-                                )}
+                              <Card key={categoryKey} className="mb-4" style={categoryCardStyle}>
+                                <Card.Section className="p-3 p-md-4">
+                                  <h3
+                                    className="mb-0 font-weight-bold"
+                                    style={{
+                                      fontSize: '1.42rem',
+                                      lineHeight: 1.3,
+                                    }}
+                                  >
+                                    {categoryName}
+                                  </h3>
 
-                                <p className="small font-weight-bold mb-1 mt-3">Criteria Preview</p>
-                                <table
-                                  className="mb-3"
-                                  style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}
-                                >
-                                  <thead>
-                                    <tr style={{ borderBottom: '1px solid #dee2e6' }}>
-                                      <th style={{ ...thStyle, padding: '6px 8px' }}>Criteria</th>
-                                      <th style={{ ...thStyle, padding: '6px 8px', textAlign: 'right' }}>Marks</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
+                                  <div style={categoryDividerStyle} />
+
+                                  <p
+                                    className="small font-weight-bold text-muted mb-2 text-uppercase"
+                                    style={{ letterSpacing: '0.04em', fontSize: '0.72rem' }}
+                                  >
+                                    Criteria Preview
+                                  </p>
+                                  <div className="d-flex flex-wrap mb-0" style={{ gap: '0.5rem' }}>
                                     {(rubric.options ?? []).map((option) => (
-                                      <tr key={`${categoryKey}-${option.name}`} style={{ borderBottom: '1px solid #f1f3f5' }}>
-                                        <td style={{ ...tdStyle, padding: '6px 8px' }}>{option.name}</td>
-                                        <td style={{ ...tdStyle, padding: '6px 8px', textAlign: 'right' }}>{option.marks}</td>
-                                      </tr>
+                                      <span
+                                        key={`${categoryKey}-${option.name}`}
+                                        style={criteriaChipStyle}
+                                      >
+                                        {option.name}
+                                        {' '}
+                                        [
+                                        {option.marks}
+                                        ]
+                                      </span>
                                     ))}
                                     {(rubric.options ?? []).length === 0 && (
-                                      <tr>
-                                        <td colSpan={2} style={{ ...tdStyle, padding: '6px 8px', color: '#6b7280' }}>
-                                          No criteria defined.
-                                        </td>
-                                      </tr>
+                                      <span className="small text-muted">No criteria defined.</span>
                                     )}
-                                  </tbody>
-                                </table>
+                                  </div>
 
-                                {feedbackOptions.length > 0 && (
-                                  <Form.Group className="mb-0">
-                                    <Form.Label className="small font-weight-bold">Predefined Feedback</Form.Label>
-                                    <PredefinedFeedbackMultiSelect
-                                      controlId={`${categoryKey}-feedback`}
-                                      options={feedbackOptions}
-                                      selected={selectedFeedbacks[categoryName] ?? []}
-                                      onChange={(nextSelected) => {
-                                        setSelectedFeedbacks((prev) => ({
-                                          ...prev,
-                                          [categoryName]: nextSelected,
-                                        }));
-                                        setComment((prev) => updateCategorySection(
-                                          prev,
-                                          categoryName,
-                                          categoryOrder,
-                                          nextSelected,
-                                          feedbackOptions,
-                                        ));
+                                  <div style={categoryDividerStyle} />
+
+                                  <div
+                                    className="d-flex align-items-center"
+                                    style={{ gap: `${categoryControlsGap}px` }}
+                                  >
+                                    {feedbackOptions.length > 0 && (
+                                      <PredefinedFeedbackMultiSelect
+                                        controlId={`${categoryKey}-feedback`}
+                                        options={feedbackOptions}
+                                        selected={selectedFeedbacks[categoryName] ?? []}
+                                        onChange={(nextSelected) => {
+                                          setSelectedFeedbacks((prev) => ({
+                                            ...prev,
+                                            [categoryName]: nextSelected,
+                                          }));
+                                          setComment((prev) => updateCategorySection(
+                                            prev,
+                                            categoryName,
+                                            categoryOrder,
+                                            nextSelected,
+                                            feedbackOptions,
+                                          ));
+                                        }}
+                                        className="flex-grow-1"
+                                      />
+                                    )}
+                                    <div
+                                      style={{
+                                        width: categoryScoreInputWidth,
+                                        flexShrink: 0,
+                                        marginLeft: feedbackOptions.length === 0 ? 'auto' : undefined,
                                       }}
-                                    />
-                                  </Form.Group>
-                                )}
-                              </div>
+                                    >
+                                      <Form.Control
+                                        type="number"
+                                        min={0}
+                                        max={10}
+                                        step="any"
+                                        value={scoreInputs[categoryName] ?? ''}
+                                        placeholder="Score"
+                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                          const nextValue = e.target.value;
+                                          setScoreInputs((prev) => ({
+                                            ...prev,
+                                            [categoryName]: nextValue,
+                                          }));
+                                        }}
+                                        isInvalid={Boolean(scoreErrors[categoryName])}
+                                        style={{
+                                          ...categoryFieldStyle,
+                                          textAlign: 'center',
+                                          height: '38px',
+                                          width: '100%',
+                                        }}
+                                      />
+                                    </div>
+                                  </div>
+                                  {scoreErrors[categoryName] && (
+                                    <div
+                                      className="d-flex"
+                                      style={{ gap: `${categoryControlsGap}px`, marginTop: '0.25rem' }}
+                                    >
+                                      {feedbackOptions.length > 0 && <div className="flex-grow-1" />}
+                                      <div
+                                        style={{
+                                          width: categoryScoreInputWidth,
+                                          flexShrink: 0,
+                                          marginLeft: feedbackOptions.length === 0 ? 'auto' : undefined,
+                                          textAlign: 'right',
+                                        }}
+                                      >
+                                        <div className="small text-danger">{scoreErrors[categoryName]}</div>
+                                      </div>
+                                    </div>
+                                  )}
+                                </Card.Section>
+                              </Card>
                             );
                           })}
-                          <div className="d-flex justify-content-between align-items-center border-top pt-2">
-                            <span className="small font-weight-bold">Total Score</span>
-                            <span className="font-weight-bold">
-                              {hasAllValidScores ? totalScore : '—'}
-                              {' / '}
-                              {maximumScore}
-                            </span>
-                          </div>
+                          <Card className="shadow-sm border-0" style={{ background: '#f8f9fa' }}>
+                            <Card.Section className="py-3">
+                              <div className="d-flex justify-content-between align-items-center">
+                                <span
+                                  className="small font-weight-bold text-muted text-uppercase mb-0"
+                                  style={{ letterSpacing: '0.04em' }}
+                                >
+                                  Total Score
+                                </span>
+                                <span className="h5 mb-0 font-weight-bold">
+                                  {hasAllValidScores ? totalScore : '—'}
+                                  {' / '}
+                                  {maximumScore}
+                                </span>
+                              </div>
+                            </Card.Section>
+                          </Card>
                         </div>
                       )}
 
-                      <Form.Group className="mb-3">
+                      <Form.Group className="mb-3 mt-1">
                         <Form.Label className="small font-weight-bold">Instructor Comment</Form.Label>
                         <Form.Control
                           as="textarea"
