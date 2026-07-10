@@ -202,6 +202,8 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
     return parsed !== null && !Number.isNaN(parsed) && parsed >= 0 && parsed <= 10;
   });
 
+  const maximumScore = rubricList.length * 10;
+
   const handleFeedbackSubmit = (feedbackStatus: 'approved' | 'rejected') => {
     const { hasErrors, rubricPayload, total } = validateScores();
     if (hasErrors) {
@@ -462,7 +464,11 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
                           })}
                           <div className="d-flex justify-content-between align-items-center border-top pt-2">
                             <span className="small font-weight-bold">Total Score</span>
-                            <span className="font-weight-bold">{hasAllValidScores ? totalScore : '—'}</span>
+                            <span className="font-weight-bold">
+                              {hasAllValidScores ? totalScore : '—'}
+                              {' / '}
+                              {maximumScore}
+                            </span>
                           </div>
                         </div>
                       )}
