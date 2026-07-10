@@ -23,6 +23,10 @@ import {
   serializeFeedbacksForSave,
   splitPastedFeedbacks,
 } from '../../utils/rubricFeedbackUtils';
+import {
+  hasInvalidCategoryMarks,
+  validateCategoryMarks,
+} from '../../utils/rubricMarksValidation';
 
 interface Props {
   onBack: () => void;
@@ -188,6 +192,9 @@ export const AdminRubricManager: React.FC<Props> = ({ onBack }) => {
         if (!o.name.trim()) { setError(`All criteria in "${c.criterion}" need a name.`); return; }
       }
     }
+    if (hasInvalidCategoryMarks(form.criteria)) {
+      return;
+    }
     setError('');
     const criteria = form.criteria.map((c) => ({
       criterion: c.criterion.trim(),
@@ -217,6 +224,7 @@ export const AdminRubricManager: React.FC<Props> = ({ onBack }) => {
   };
 
   const rubrics = data?.results ?? [];
+  const categoryMarksInvalid = hasInvalidCategoryMarks(form.criteria);
 
   return (
     <div className="d-flex flex-column">
@@ -254,7 +262,10 @@ export const AdminRubricManager: React.FC<Props> = ({ onBack }) => {
             </Button>
           </div>
 
-          {form.criteria.map((criterion, ci) => (
+          {form.criteria.map((criterion, ci) => {
+            const marksValidation = validateCategoryMarks(criterion.options);
+
+            return (
             <div
               key={ci}
               className="mb-3 p-3 rounded border"
@@ -322,7 +333,20 @@ export const AdminRubricManager: React.FC<Props> = ({ onBack }) => {
                 ))}
               </div>
 
-              <Button variant="tertiary" size="sm" iconBefore={Add} onClick={() => addOption(ci)}>
+              <div
+                className={`small mt-1 ${marksValidation.isValid ? 'text-success' : 'text-muted'}`}
+              >
+                Category Total:
+                {' '}
+                {marksValidation.total}
+                {' '}
+                / 10
+              </div>
+              {marksValidation.error && (
+                <div className="small text-danger mt-1">{marksValidation.error}</div>
+              )}
+
+              <Button variant="tertiary" size="sm" iconBefore={Add} onClick={() => addOption(ci)} className="mt-2">
                 <span style={{ fontSize: 12 }}>Add Criteria</span>
               </Button>
 
@@ -367,7 +391,8 @@ export const AdminRubricManager: React.FC<Props> = ({ onBack }) => {
                 </Button>
               </div>
             </div>
-          ))}
+            );
+          })}
 
           <div className="d-flex mt-4" style={{ gap: '0.5rem' }}>
             <Button
@@ -375,7 +400,7 @@ export const AdminRubricManager: React.FC<Props> = ({ onBack }) => {
               size="sm"
               iconBefore={editingId ? undefined : Add}
               onClick={handleSubmit}
-              disabled={saveMut.isPending}
+              disabled={saveMut.isPending || categoryMarksInvalid}
             >
               {saveMut.isPending
                 ? <Spinner animation="border" size="sm" screenReaderText="Saving" />
