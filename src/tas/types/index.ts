@@ -100,6 +100,8 @@ export interface RubricOption {
 export interface RubricCriterion {
   criterion: string;
   options: RubricOption[];
+  /** Category-scoped predefined feedback strings; optional on legacy rubrics. */
+  feedbacks?: string[];
 }
 
 export interface Rubric {

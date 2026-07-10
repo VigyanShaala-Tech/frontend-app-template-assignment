@@ -4,7 +4,7 @@
  *
  * A rubric has:
  *   - name (string)
- *   - criteria: [{ criterion, options: [{ name, marks }] }]
+ *   - criteria: [{ criterion, options: [{ name, marks }], feedbacks?: string[] }]
  *
  * The left panel is a full rubric form (name + dynamic criteria/options).
  * The right panel lists existing rubrics with edit/deactivate actions.
@@ -18,16 +18,32 @@ import {
 import { Add, ArrowBack, Close, Edit } from '@openedx/paragon/icons';
 import { rubricsApi } from '../../services/api';
 import type { Rubric, RubricCriterion, RubricOption } from '../../types';
+import {
+  normalizeFeedbacks,
+  serializeFeedbacksForSave,
+  splitPastedFeedbacks,
+} from '../../utils/rubricFeedbackUtils';
 
 interface Props {
   onBack: () => void;
 }
 
 const EMPTY_OPTION: RubricOption = { name: '', marks: 0 };
-const EMPTY_CRITERION: RubricCriterion = { criterion: '', options: [{ ...EMPTY_OPTION }] };
+const EMPTY_CRITERION: RubricCriterion = {
+  criterion: '',
+  options: [{ ...EMPTY_OPTION }],
+  feedbacks: [],
+};
 
 function emptyForm() {
-  return { name: '', criteria: [{ ...EMPTY_CRITERION, options: [{ ...EMPTY_OPTION }] }] as RubricCriterion[] };
+  return {
+    name: '',
+    criteria: [{
+      ...EMPTY_CRITERION,
+      options: [{ ...EMPTY_OPTION }],
+      feedbacks: [],
+    }] as RubricCriterion[],
+  };
 }
 
 export const AdminRubricManager: React.FC<Props> = ({ onBack }) => {
@@ -71,7 +87,11 @@ export const AdminRubricManager: React.FC<Props> = ({ onBack }) => {
   const addCriterion = () =>
     setForm((prev) => ({
       ...prev,
-      criteria: [...prev.criteria, { ...EMPTY_CRITERION, options: [{ ...EMPTY_OPTION }] }],
+      criteria: [...prev.criteria, {
+        ...EMPTY_CRITERION,
+        options: [{ ...EMPTY_OPTION }],
+        feedbacks: [],
+      }],
     }));
 
   const removeCriterion = (ci: number) =>
@@ -106,24 +126,87 @@ export const AdminRubricManager: React.FC<Props> = ({ onBack }) => {
       return { ...prev, criteria };
     });
 
+  // ── Feedbacks helpers (category-scoped, independent of options) ─────────
+
+  const setFeedbackText = (ci: number, fi: number, value: string) =>
+    setForm((prev) => {
+      const criteria = prev.criteria.map((c, i) => {
+        if (i !== ci) return c;
+        const feedbacks = normalizeFeedbacks(c.feedbacks).map((fb, j) => (j === fi ? value : fb));
+        return { ...c, feedbacks };
+      });
+      return { ...prev, criteria };
+    });
+
+  const addFeedback = (ci: number) =>
+    setForm((prev) => {
+      const criteria = prev.criteria.map((c, i) => {
+        if (i !== ci) return c;
+        return { ...c, feedbacks: [...normalizeFeedbacks(c.feedbacks), ''] };
+      });
+      return { ...prev, criteria };
+    });
+
+  const removeFeedback = (ci: number, fi: number) =>
+    setForm((prev) => {
+      const criteria = prev.criteria.map((c, i) => {
+        if (i !== ci) return c;
+        return { ...c, feedbacks: normalizeFeedbacks(c.feedbacks).filter((_, j) => j !== fi) };
+      });
+      return { ...prev, criteria };
+    });
+
+  const handleFeedbackPaste = (ci: number, fi: number, pastedText: string) => {
+    if (!/\r|\n/.test(pastedText)) {
+      return false;
+    }
+    const lines = splitPastedFeedbacks(pastedText);
+    if (lines.length === 0) {
+      return true;
+    }
+    setForm((prev) => {
+      const criteria = prev.criteria.map((c, i) => {
+        if (i !== ci) return c;
+        const feedbacks = [...normalizeFeedbacks(c.feedbacks)];
+        feedbacks[fi] = lines[0];
+        feedbacks.splice(fi + 1, 0, ...lines.slice(1));
+        return { ...c, feedbacks };
+      });
+      return { ...prev, criteria };
+    });
+    return true;
+  };
+
   // ── Submit ────────────────────────────────────────────────────────────────
 
   const handleSubmit = () => {
     if (!form.name.trim()) { setError('Rubric name is required.'); return; }
     for (const [ci, c] of form.criteria.entries()) {
       if (!c.criterion.trim()) { setError(`Category ${ci + 1} needs a name.`); return; }
-      if (c.options.length === 0) { setError(`Category "${c.criterion}" needs at least one criteria.`); return; }
+      if (c.options.length === 0) { setError(`Category "${c.criterion}" needs at least one criterion.`); return; }
       for (const o of c.options) {
         if (!o.name.trim()) { setError(`All criteria in "${c.criterion}" need a name.`); return; }
       }
     }
     setError('');
-    saveMut.mutate({ name: form.name.trim(), criteria: form.criteria });
+    const criteria = form.criteria.map((c) => ({
+      criterion: c.criterion.trim(),
+      options: c.options,
+      feedbacks: serializeFeedbacksForSave(normalizeFeedbacks(c.feedbacks)),
+    }));
+    saveMut.mutate({ name: form.name.trim(), criteria });
   };
 
   const startEdit = (r: Rubric) => {
     setEditingId(r.id);
-    setForm({ name: r.name, criteria: r.criteria.map((c) => ({ ...c, options: [...c.options] })) });
+    setForm({
+      name: r.name,
+      criteria: r.criteria.map((c) => ({
+        ...c,
+        options: [...c.options],
+        feedbacks: normalizeFeedbacks(c.feedbacks),
+      })),
+    });
     setError('');
   };
 
@@ -242,6 +325,47 @@ export const AdminRubricManager: React.FC<Props> = ({ onBack }) => {
               <Button variant="tertiary" size="sm" iconBefore={Add} onClick={() => addOption(ci)}>
                 <span style={{ fontSize: 12 }}>Add Criteria</span>
               </Button>
+
+              <div className="border-top mt-3 pt-3">
+                <div className="mb-2">
+                  <span className="small font-weight-bold">Feedback</span>
+                </div>
+
+                {normalizeFeedbacks(criterion.feedbacks).map((fb, fi) => (
+                  <div key={fi} className="d-flex align-items-start mb-2" style={{ gap: '0.4rem' }}>
+                    <Form.Control
+                      as="textarea"
+                      rows={2}
+                      size="sm"
+                      value={fb}
+                      onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                        setFeedbackText(ci, fi, e.target.value)
+                      }
+                      onPaste={(e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+                        const pasted = e.clipboardData.getData('text');
+                        if (handleFeedbackPaste(ci, fi, pasted)) {
+                          e.preventDefault();
+                        }
+                      }}
+                      placeholder="Predefined feedback text"
+                      style={{ flex: 1 }}
+                    />
+                    <Button
+                      variant="tertiary"
+                      size="sm"
+                      iconBefore={Close}
+                      onClick={() => removeFeedback(ci, fi)}
+                      className="text-muted"
+                    >
+                      {' '}
+                    </Button>
+                  </div>
+                ))}
+
+                <Button variant="tertiary" size="sm" iconBefore={Add} onClick={() => addFeedback(ci)}>
+                  <span style={{ fontSize: 12 }}>Add Feedback</span>
+                </Button>
+              </div>
             </div>
           ))}
 
