@@ -8,7 +8,6 @@ import type {
   TemplateBlockItem,
   BlockTemplatesResponse,
   BlockRubricsResponse,
-  BlockFeedbackOptionsResponse,
   Submission,
   SubmissionVersion,
 } from '../types';
@@ -161,39 +160,6 @@ export const MOCK_BLOCK_RUBRICS: BlockRubricsResponse = {
       ],
     },
   ],
-};
-
-// ─── Block feedback options (predefined comment snippets per category) ────────
-
-const DEMO_USAGE_KEY = 'block-v1:Org+Course101+2024+type@format_forge+block@abc123';
-
-export const MOCK_BLOCK_FEEDBACK_OPTIONS: Record<string, BlockFeedbackOptionsResponse> = {
-  [DEMO_USAGE_KEY]: {
-    usage_key: DEMO_USAGE_KEY,
-    categories: [
-      {
-        category_id: 'Hypothesis',
-        options: [
-          { id: 'fb-h1', label: 'Clear and testable hypothesis' },
-          { id: 'fb-h2', label: 'Hypothesis lacks a measurable outcome' },
-        ],
-      },
-      {
-        category_id: 'Methodology',
-        options: [
-          { id: 'fb-m1', label: 'Procedure is described with enough detail to replicate' },
-          { id: 'fb-m2', label: 'Missing controls or key steps in the method' },
-        ],
-      },
-      {
-        category_id: 'Results & Analysis',
-        options: [
-          { id: 'fb-r1', label: 'Results are clearly linked to the hypothesis' },
-          { id: 'fb-r2', label: 'Analysis needs stronger support from the data' },
-        ],
-      },
-    ],
-  },
 };
 
 // ─── In-memory submission store ───────────────────────────────────────────────

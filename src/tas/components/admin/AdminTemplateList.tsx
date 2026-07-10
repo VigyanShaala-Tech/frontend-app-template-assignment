@@ -5,7 +5,6 @@ import {
 } from '@openedx/paragon';
 import { Add, Search } from '@openedx/paragon/icons';
 import { templatesApi, adminTemplatesApi, templateTypesApi } from '../../services/api';
-import { useTasStore } from '../../store/tasStore';
 import type { Template } from '../../types';
 
 interface Props {
@@ -13,14 +12,10 @@ interface Props {
   onCreate: () => void;
   onManageTypes: () => void;
   onManageRubrics: () => void;
-  onManageFeedbackOptions: () => void;
 }
 
-export const AdminTemplateList: React.FC<Props> = ({
-  onEdit, onCreate, onManageTypes, onManageRubrics, onManageFeedbackOptions,
-}) => {
+export const AdminTemplateList: React.FC<Props> = ({ onEdit, onCreate, onManageTypes, onManageRubrics }) => {
   const qc = useQueryClient();
-  const usageKey = useTasStore((s) => s.mfeContext?.usageKey ?? '');
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
 
@@ -105,12 +100,6 @@ export const AdminTemplateList: React.FC<Props> = ({
             <Button variant="tertiary" size="sm" onClick={onManageRubrics}>
               Manage Rubrics
             </Button>
-
-            {usageKey && (
-              <Button variant="tertiary" size="sm" onClick={onManageFeedbackOptions}>
-                Feedback Options
-              </Button>
-            )}
 
             <Button variant="primary" size="sm" iconBefore={Add} onClick={onCreate}>
               New Template
