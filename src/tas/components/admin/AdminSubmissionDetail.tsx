@@ -7,7 +7,7 @@
  * - Always shows version history at the bottom
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 import {
@@ -17,6 +17,8 @@ import { ArrowBack, CheckCircle } from '@openedx/paragon/icons';
 import { adminSubmissionsApi, templatesApi } from '../../services/api';
 import { useTasStore } from '../../store/tasStore';
 import type { RubricCriterion, RubricFeedbackEntry } from '../../types';
+import { normalizeFeedbacks, updateCategorySection } from '../../utils/instructorCommentSync';
+import { PredefinedFeedbackMultiSelect } from './PredefinedFeedbackMultiSelect';
 
 interface Props {
   submissionId: string;
@@ -58,6 +60,39 @@ const tdStyle: React.CSSProperties = {
   verticalAlign: 'middle',
 };
 
+const criteriaChipStyle: React.CSSProperties = {
+  display: 'inline-block',
+  padding: '6px 12px',
+  fontSize: '0.8125rem',
+  fontWeight: 500,
+  color: '#374151',
+  backgroundColor: '#f8f9fa',
+  border: '1px solid #dee2e6',
+  borderRadius: '6px',
+  lineHeight: 1.4,
+};
+
+const categoryDividerStyle: React.CSSProperties = {
+  borderTop: '1px solid #e9ecef',
+  margin: '1rem 0',
+};
+
+const categoryCardStyle: React.CSSProperties = {
+  border: '1px solid #ced4da',
+  borderRadius: '8px',
+  boxShadow: '0 1px 3px rgba(0, 0, 0, 0.06)',
+};
+
+const categoryFieldStyle: React.CSSProperties = {
+  border: '1px solid #00262b',
+  borderRadius: '0.25rem',
+  padding: '0 0.5rem',
+  boxSizing: 'border-box',
+};
+
+const categoryScoreInputWidth = 100;
+const categoryControlsGap = 12;
+
 export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack }) => {
   const { mfeContext } = useTasStore();
   const usageKey = mfeContext?.usageKey ?? '';
@@ -67,7 +102,16 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
   // Maps criterion name -> raw input value (empty string means null score)
   const [scoreInputs, setScoreInputs] = useState<Record<string, string>>({});
   const [scoreErrors, setScoreErrors] = useState<Record<string, string>>({});
+  const [selectedFeedbacks, setSelectedFeedbacks] = useState<Record<string, string[]>>({});
   const [feedbackSaved, setFeedbackSaved] = useState(false);
+
+  useEffect(() => {
+    setComment('');
+    setScoreInputs({});
+    setScoreErrors({});
+    setSelectedFeedbacks({});
+    setFeedbackSaved(false);
+  }, [usageKey, submissionId]);
 
   const { data: submission, isLoading: loadingSub } = useQuery({
     queryKey: ['admin-submission-detail', submissionId],
@@ -78,6 +122,9 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
     queryKey: ['block-rubrics', usageKey],
     queryFn: () => adminSubmissionsApi.getRubrics(usageKey),
     enabled: !!usageKey,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
   });
 
   // template_id comes from the backend once deployed; fall back to fetching by template_block_id
@@ -125,6 +172,7 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
   }
 
   const rubricList: RubricCriterion[] = rubrics?.rubrics ?? [];
+  const categoryOrder = rubricList.map((rubric) => rubric.criterion);
   const parseScoreInput = (rawInput: string): number | null => {
     const trimmed = rawInput.trim();
     if (trimmed === '') {
@@ -186,6 +234,8 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
     const parsed = parseScoreInput(scoreInputs[rubric.criterion] ?? '');
     return parsed !== null && !Number.isNaN(parsed) && parsed >= 0 && parsed <= 10;
   });
+
+  const maximumScore = rubricList.length * 10;
 
   const handleFeedbackSubmit = (feedbackStatus: 'approved' | 'rejected') => {
     const { hasErrors, rubricPayload, total } = validateScores();
@@ -357,7 +407,7 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
                           {rubricList.map((rubric, idx) => (
                             <Form.Group key={rubric.criterion || `criterion-${idx + 1}`} className="mb-4">
                               <Form.Label className="small font-weight-bold d-block mb-2">
-                                {rubric.criterion || `Criterion ${idx + 1}`}
+                                {rubric.criterion || `Category ${idx + 1}`}
                               </Form.Label>
                               <Form.Control
                                 type="number"
@@ -386,18 +436,160 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
                             <span className="small font-weight-bold">Total Score</span>
                             <span className="font-weight-bold">{hasAllValidScores ? totalScore : '—'}</span>
                           </div>
+                          {rubricList.map((rubric, idx) => {
+                            const categoryName = rubric.criterion || `Category ${idx + 1}`;
+                            const categoryKey = `${usageKey}-${categoryName}`;
+                            const feedbackOptions = normalizeFeedbacks(rubric.feedbacks);
+
+                            return (
+                              <Card key={categoryKey} className="mb-4" style={categoryCardStyle}>
+                                <Card.Section className="p-3 p-md-4">
+                                  <h3
+                                    className="mb-0 font-weight-bold"
+                                    style={{
+                                      fontSize: '1.42rem',
+                                      lineHeight: 1.3,
+                                    }}
+                                  >
+                                    {categoryName}
+                                  </h3>
+
+                                  <div style={categoryDividerStyle} />
+
+                                  <p
+                                    className="small font-weight-bold text-muted mb-2 text-uppercase"
+                                    style={{ letterSpacing: '0.04em', fontSize: '0.72rem' }}
+                                  >
+                                    Criteria Preview
+                                  </p>
+                                  <div className="d-flex flex-wrap mb-0" style={{ gap: '0.5rem' }}>
+                                    {(rubric.options ?? []).map((option) => (
+                                      <span
+                                        key={`${categoryKey}-${option.name}`}
+                                        style={criteriaChipStyle}
+                                      >
+                                        {option.name}
+                                        {' '}
+                                        [
+                                        {option.marks}
+                                        ]
+                                      </span>
+                                    ))}
+                                    {(rubric.options ?? []).length === 0 && (
+                                      <span className="small text-muted">No criteria defined.</span>
+                                    )}
+                                  </div>
+
+                                  <div style={categoryDividerStyle} />
+
+                                  <div
+                                    className="d-flex align-items-center"
+                                    style={{ gap: `${categoryControlsGap}px` }}
+                                  >
+                                    {feedbackOptions.length > 0 && (
+                                      <PredefinedFeedbackMultiSelect
+                                        controlId={`${categoryKey}-feedback`}
+                                        options={feedbackOptions}
+                                        selected={selectedFeedbacks[categoryName] ?? []}
+                                        onChange={(nextSelected) => {
+                                          setSelectedFeedbacks((prev) => ({
+                                            ...prev,
+                                            [categoryName]: nextSelected,
+                                          }));
+                                          setComment((prev) => updateCategorySection(
+                                            prev,
+                                            categoryName,
+                                            categoryOrder,
+                                            nextSelected,
+                                            feedbackOptions,
+                                          ));
+                                        }}
+                                        className="flex-grow-1"
+                                      />
+                                    )}
+                                    <div
+                                      style={{
+                                        width: categoryScoreInputWidth,
+                                        flexShrink: 0,
+                                        marginLeft: feedbackOptions.length === 0 ? 'auto' : undefined,
+                                      }}
+                                    >
+                                      <Form.Control
+                                        type="number"
+                                        min={0}
+                                        max={10}
+                                        step="any"
+                                        value={scoreInputs[categoryName] ?? ''}
+                                        placeholder="Score"
+                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                          const nextValue = e.target.value;
+                                          setScoreInputs((prev) => ({
+                                            ...prev,
+                                            [categoryName]: nextValue,
+                                          }));
+                                        }}
+                                        isInvalid={Boolean(scoreErrors[categoryName])}
+                                        style={{
+                                          ...categoryFieldStyle,
+                                          textAlign: 'center',
+                                          height: '38px',
+                                          width: '100%',
+                                        }}
+                                      />
+                                    </div>
+                                  </div>
+                                  {scoreErrors[categoryName] && (
+                                    <div
+                                      className="d-flex"
+                                      style={{ gap: `${categoryControlsGap}px`, marginTop: '0.25rem' }}
+                                    >
+                                      {feedbackOptions.length > 0 && <div className="flex-grow-1" />}
+                                      <div
+                                        style={{
+                                          width: categoryScoreInputWidth,
+                                          flexShrink: 0,
+                                          marginLeft: feedbackOptions.length === 0 ? 'auto' : undefined,
+                                          textAlign: 'right',
+                                        }}
+                                      >
+                                        <div className="small text-danger">{scoreErrors[categoryName]}</div>
+                                      </div>
+                                    </div>
+                                  )}
+                                </Card.Section>
+                              </Card>
+                            );
+                          })}
+                          <Card className="shadow-sm border-0" style={{ background: '#f8f9fa' }}>
+                            <Card.Section className="py-3">
+                              <div className="d-flex justify-content-between align-items-center">
+                                <span
+                                  className="small font-weight-bold text-muted text-uppercase mb-0"
+                                  style={{ letterSpacing: '0.04em' }}
+                                >
+                                  Total Score
+                                </span>
+                                <span className="h5 mb-0 font-weight-bold">
+                                  {hasAllValidScores ? totalScore : '—'}
+                                  {' / '}
+                                  {maximumScore}
+                                </span>
+                              </div>
+                            </Card.Section>
+                          </Card>
                         </div>
                       )}
 
-                      <Form.Group className="mb-3">
-                        <Form.Label className="small font-weight-bold">Comments</Form.Label>
+                      <Form.Group className="mb-3 mt-1">
+                        <Form.Label className="small font-weight-bold">Instructor Comment</Form.Label>
                         <Form.Control
                           as="textarea"
-                          rows={4}
+                          rows={6}
                           value={comment}
                           onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setComment(e.target.value)}
                           placeholder="Leave feedback for the student…"
                         />
+                        <div className="small text-muted mt-1">(Editable by the instructor)</div>
                         {comment.length >= COMMENT_SOFT_WARN_LENGTH && (
                           <div className="small text-warning mt-1">
                             This comment is very long (50,000+ characters). It will still be saved.
