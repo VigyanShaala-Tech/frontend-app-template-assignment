@@ -11,13 +11,16 @@ import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 import {
-  Button, Badge, Spinner, Form, Card,
+  Button, Badge, Spinner, Form, Card, IconButton, OverlayTrigger, Tooltip,
 } from '@openedx/paragon';
-import { ArrowBack, CheckCircle } from '@openedx/paragon/icons';
+import { ArrowBack, CheckCircle, InfoOutline } from '@openedx/paragon/icons';
 import { adminSubmissionsApi, templatesApi } from '../../services/api';
 import { useTasStore } from '../../store/tasStore';
 import type { RubricCriterion, RubricFeedbackEntry } from '../../types';
+import { htmlToPlainText, plainTextToHtml } from '../../utils/commentHtmlAdapter';
 import { normalizeFeedbacks, updateCategorySection } from '../../utils/instructorCommentSync';
+import { InstructorCommentEditor } from './InstructorCommentEditor';
+import { InstructorCommentHtml } from './InstructorCommentHtml';
 import { PredefinedFeedbackMultiSelect } from './PredefinedFeedbackMultiSelect';
 
 interface Props {
@@ -38,6 +41,13 @@ const FEEDBACK_BADGE: Record<string, string> = {
 };
 
 export const COMMENT_SOFT_WARN_LENGTH = 50_000;
+
+const INSTRUCTOR_COMMENT_FORMATTING_NOTE = (
+  'If you modify the predefined feedback selection after applying rich text formatting '
+  + '(bold, italics, underline, hyperlinks, alignment, headings, font size, etc.), '
+  + 'the Instructor Comment will be regenerated and any manual formatting may be lost. '
+  + 'To avoid this, finalize your predefined feedback selections before applying formatting.'
+);
 
 const FEEDBACK_BORDER: Record<string, string> = {
   rejected: '#dc3545',
@@ -378,9 +388,12 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
                       </div>
                     )}
                     {submission.feedback.comment ? (
-                      <p className="small mt-2 mb-0" style={{ whiteSpace: 'pre-wrap' }}>
-                        {submission.feedback.comment}
-                      </p>
+                      <div className="mt-2">
+                        <InstructorCommentHtml
+                          comment={submission.feedback.comment}
+                          className="small mb-0"
+                        />
+                      </div>
                     ) : (
                       <p className="text-muted small mb-0">No comment left.</p>
                     )}
@@ -463,12 +476,14 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
                                             ...prev,
                                             [categoryName]: nextSelected,
                                           }));
-                                          setComment((prev) => updateCategorySection(
-                                            prev,
-                                            categoryName,
-                                            categoryOrder,
-                                            nextSelected,
-                                            feedbackOptions,
+                                          setComment((prev) => plainTextToHtml(
+                                            updateCategorySection(
+                                              htmlToPlainText(prev),
+                                              categoryName,
+                                              categoryOrder,
+                                              nextSelected,
+                                              feedbackOptions,
+                                            ),
                                           ));
                                         }}
                                         className="flex-grow-1"
@@ -548,12 +563,34 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
                       )}
 
                       <Form.Group className="mb-3 mt-1">
-                        <Form.Label className="small font-weight-bold">Instructor Comment</Form.Label>
-                        <Form.Control
-                          as="textarea"
-                          rows={6}
+                        <div className="d-flex align-items-center mb-2">
+                          <Form.Label className="small font-weight-bold mb-0 mr-1">
+                            Instructor Comment
+                          </Form.Label>
+                          <OverlayTrigger
+                            placement="top"
+                            trigger={['hover', 'focus', 'click']}
+                            rootClose
+                            overlay={(
+                              <Tooltip
+                                id="instructor-comment-formatting-note"
+                                className="tas-instructor-comment-info-tooltip"
+                              >
+                                {INSTRUCTOR_COMMENT_FORMATTING_NOTE}
+                              </Tooltip>
+                            )}
+                          >
+                            <IconButton
+                              src={InfoOutline}
+                              alt="About Instructor Comment formatting and predefined feedback"
+                              size="inline"
+                              variant="secondary"
+                            />
+                          </OverlayTrigger>
+                        </div>
+                        <InstructorCommentEditor
                           value={comment}
-                          onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setComment(e.target.value)}
+                          onChange={setComment}
                           placeholder="Leave feedback for the student…"
                         />
                         <div className="small text-muted mt-1">(Editable by the instructor)</div>
@@ -629,7 +666,7 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
                     </div>
                   )}
                   {v.comment ? (
-                    <p className="small mb-0" style={{ whiteSpace: 'pre-wrap' }}>{v.comment}</p>
+                    <InstructorCommentHtml comment={v.comment} className="small mb-0" />
                   ) : (
                     <p className="text-muted small mb-0">No comment.</p>
                   )}

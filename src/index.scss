@@ -97,3 +97,119 @@
     }
   }
 }
+
+// Instructor Comment rich text editor (Quill)
+.tas-instructor-comment-editor {
+  .quill {
+    background-color: #FFFFFF;
+    border-radius: .25rem;
+  }
+
+  .ql-toolbar.ql-snow {
+    border: 1px solid #CED4DA;
+    border-radius: .25rem .25rem 0 0;
+    background-color: #F8F9FA;
+  }
+
+  .ql-container.ql-snow {
+    border: 1px solid #CED4DA;
+    border-top: 0;
+    border-radius: 0 0 .25rem .25rem;
+    min-height: 9rem;
+    font-size: 1rem;
+  }
+
+  .ql-editor {
+    min-height: 9rem;
+  }
+
+  .ql-editor.ql-blank::before {
+    color: #6C757D;
+    font-style: normal;
+  }
+
+  .ql-snow .ql-toolbar button.ql-undo,
+  .ql-snow.ql-toolbar button.ql-undo,
+  .ql-snow .ql-toolbar button.ql-redo,
+  .ql-snow.ql-toolbar button.ql-redo,
+  .ql-snow .ql-toolbar button.ql-increaseFontSize,
+  .ql-snow.ql-toolbar button.ql-increaseFontSize,
+  .ql-snow .ql-toolbar button.ql-decreaseFontSize,
+  .ql-snow.ql-toolbar button.ql-decreaseFontSize {
+    width: 28px;
+    height: 24px;
+    padding: 3px 5px;
+  }
+
+  .ql-snow .ql-toolbar button.ql-increaseFontSize,
+  .ql-snow.ql-toolbar button.ql-increaseFontSize,
+  .ql-snow .ql-toolbar button.ql-decreaseFontSize,
+  .ql-snow.ql-toolbar button.ql-decreaseFontSize {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .ql-snow .ql-undo::before,
+  .ql-snow .ql-redo::before,
+  .ql-snow .ql-increaseFontSize::before,
+  .ql-snow .ql-decreaseFontSize::before {
+    display: block;
+    width: 18px;
+    height: 18px;
+    text-align: center;
+    font-size: 11px;
+    line-height: 18px;
+    font-weight: 400;
+    font-family: inherit;
+  }
+
+  .ql-snow .ql-undo::before {
+    content: "↶";
+    font-size: 14px;
+  }
+
+  .ql-snow .ql-redo::before {
+    content: "↷";
+    font-size: 14px;
+  }
+
+  .ql-snow .ql-increaseFontSize::before {
+    content: "A+";
+    letter-spacing: -.02em;
+  }
+
+  .ql-snow .ql-decreaseFontSize::before {
+    content: "A-";
+    letter-spacing: -.02em;
+  }
+}
+
+.tas-instructor-comment-info-tooltip {
+  .tooltip-inner {
+    max-width: 20rem;
+    text-align: left;
+  }
+}
+
+.tas-instructor-comment-html {
+  word-break: break-word;
+
+  p {
+    margin-bottom: .5rem;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
+
+  a {
+    color: #0D6EFD;
+  }
+
+  ul,
+  ol {
+    margin: 0 0 .5rem 1.25rem;
+    padding: 0;
+  }
+}
