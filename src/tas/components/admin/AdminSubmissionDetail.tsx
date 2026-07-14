@@ -7,7 +7,7 @@
  * - Always shows version history at the bottom
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 import {
@@ -18,7 +18,11 @@ import { adminSubmissionsApi, templatesApi } from '../../services/api';
 import { useTasStore } from '../../store/tasStore';
 import type { RubricCriterion, RubricFeedbackEntry } from '../../types';
 import { htmlToPlainText, plainTextToHtml } from '../../utils/commentHtmlAdapter';
-import { normalizeFeedbacks, updateCategorySection } from '../../utils/instructorCommentSync';
+import {
+  normalizeFeedbacks,
+  parseInstructorCommentSections,
+  updateCategorySection,
+} from '../../utils/instructorCommentSync';
 import { InstructorCommentEditor } from './InstructorCommentEditor';
 import { InstructorCommentHtml } from './InstructorCommentHtml';
 import { PredefinedFeedbackMultiSelect } from './PredefinedFeedbackMultiSelect';
@@ -114,6 +118,7 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
   const [scoreErrors, setScoreErrors] = useState<Record<string, string>>({});
   const [selectedFeedbacks, setSelectedFeedbacks] = useState<Record<string, string[]>>({});
   const [feedbackSaved, setFeedbackSaved] = useState(false);
+  const hydratedSubmissionIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     setComment('');
@@ -121,6 +126,7 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
     setScoreErrors({});
     setSelectedFeedbacks({});
     setFeedbackSaved(false);
+    hydratedSubmissionIdRef.current = null;
   }, [usageKey, submissionId]);
 
   const { data: submission, isLoading: loadingSub } = useQuery({
@@ -136,6 +142,60 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
     refetchOnMount: 'always',
     refetchOnWindowFocus: false,
   });
+
+  // Prefill scores/comment/predefined selections when reopening a submitted review
+  // (e.g. after withdraw). Runs once per submissionId load; does not wipe in-progress edits.
+  useEffect(() => {
+    if (!submission || submission.status !== 'submitted') return;
+    if (hydratedSubmissionIdRef.current === submissionId) return;
+
+    const feedback = submission.feedback;
+    if (!feedback) return;
+
+    const hasRubrics = Array.isArray(feedback.rubrics) && feedback.rubrics.length > 0;
+    const hasComment = typeof feedback.comment === 'string' && feedback.comment.length > 0;
+    if (!hasRubrics && !hasComment) return;
+
+    // Wait for block rubrics before restoring predefined feedback selections.
+    if (hasComment && rubrics === undefined) return;
+
+    const nextScores: Record<string, string> = {};
+    (feedback.rubrics ?? []).forEach((entry: RubricFeedbackEntry) => {
+      const value = entry.score ?? entry.marks;
+      if (value != null && entry.criterion) {
+        nextScores[entry.criterion] = String(value);
+      }
+    });
+    if (Object.keys(nextScores).length > 0) {
+      setScoreInputs(nextScores);
+    }
+
+    if (hasComment) {
+      setComment(feedback.comment);
+    }
+
+    const rubricList: RubricCriterion[] = rubrics?.rubrics ?? [];
+    if (rubricList.length > 0 && hasComment) {
+      const categoryOrder = rubricList.map((r) => r.criterion);
+      const parsed = parseInstructorCommentSections(
+        htmlToPlainText(feedback.comment),
+        categoryOrder,
+      );
+      const nextSelected: Record<string, string[]> = {};
+      rubricList.forEach((rubric) => {
+        const options = normalizeFeedbacks(rubric.feedbacks);
+        if (options.length === 0) return;
+        const body = parsed.sections[rubric.criterion] ?? '';
+        const lines = body.split('\n').map((line) => line.trim()).filter(Boolean);
+        nextSelected[rubric.criterion] = options.filter((opt) => lines.includes(opt));
+      });
+      if (Object.keys(nextSelected).length > 0) {
+        setSelectedFeedbacks(nextSelected);
+      }
+    }
+
+    hydratedSubmissionIdRef.current = submissionId;
+  }, [submission, rubrics, submissionId]);
 
   // template_id comes from the backend once deployed; fall back to fetching by template_block_id
   const templateId = submission?.template_block_id ?? '';
