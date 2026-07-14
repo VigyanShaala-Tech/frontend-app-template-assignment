@@ -28,6 +28,38 @@ const STATUS_BADGE: Record<string, string> = {
 
 const FINALIZED_FEEDBACK = new Set(['approved', 'rejected']);
 
+const WITHDRAW_ERROR_FALLBACK = 'Failed to withdraw feedback. Please try again.';
+
+/** Prefer backend detail/message; include HTTP status when available. */
+function formatWithdrawError(error: unknown): string {
+  const response = (error as { response?: { status?: number; data?: unknown } })?.response;
+  const status = response?.status;
+  const data = response?.data;
+  let detail: string | undefined;
+
+  if (data && typeof data === 'object') {
+    const body = data as { detail?: unknown; message?: unknown };
+    if (typeof body.detail === 'string' && body.detail.trim()) {
+      detail = body.detail.trim();
+    } else if (typeof body.message === 'string' && body.message.trim()) {
+      detail = body.message.trim();
+    }
+  } else if (typeof data === 'string' && data.trim()) {
+    detail = data.trim().slice(0, 200);
+  }
+
+  if (status && detail) {
+    return `Withdraw failed (${status}): ${detail}`;
+  }
+  if (status) {
+    return `Withdraw failed (${status}). Please try again.`;
+  }
+  if (detail) {
+    return detail;
+  }
+  return WITHDRAW_ERROR_FALLBACK;
+}
+
 export const AdminSubmissionsList: React.FC<Props> = ({ onView }) => {
   const { mfeContext } = useTasStore();
   const usageKey = mfeContext?.usageKey ?? '';
@@ -49,6 +81,15 @@ export const AdminSubmissionsList: React.FC<Props> = ({ onView }) => {
       queryClient.invalidateQueries({ queryKey: ['admin-submissions', usageKey] });
       queryClient.invalidateQueries({ queryKey: ['admin-submission-detail', submissionId] });
       onView(submissionId);
+    },
+    onError: (error) => {
+      const response = (error as { response?: { status?: number; data?: unknown } })?.response;
+      // eslint-disable-next-line no-console
+      console.error('Withdraw feedback failed', {
+        status: response?.status,
+        body: response?.data,
+        error,
+      });
     },
   });
 
@@ -185,7 +226,9 @@ export const AdminSubmissionsList: React.FC<Props> = ({ onView }) => {
         )}
 
         {withdrawMut.isError && (
-          <div className="alert alert-danger mt-3">Failed to withdraw feedback. Please try again.</div>
+          <div className="alert alert-danger mt-3">
+            {formatWithdrawError(withdrawMut.error)}
+          </div>
         )}
       </div>
 

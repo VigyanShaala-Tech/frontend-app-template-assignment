@@ -37,6 +37,39 @@ jobs:
         ssh "${{ secrets.SSH_USERNAME }}@${{ secrets.EC2_IP_ADDRESS }}" "bash -se" << 'EOF'
           set -euo pipefail
           source ~/tutor-env/bin/activate
+
+          # Withdraw API lives in tas_integration (LMS), not the MFE image.
+          # Keep LMS plugin on master so POST .../feedback/withdraw/ is reachable.
+          TAS_DIR=""
+          for candidate in \
+            "$HOME/tas_integration" \
+            "$HOME/tutor_repo/tas_integration" \
+            /home/*/tas_integration \
+            /opt/tas_integration
+          do
+            # Expand globs that matched nothing
+            for path in $candidate; do
+              if [ -d "$path/.git" ]; then
+                TAS_DIR="$path"
+                break 2
+              fi
+            done
+          done
+
+          if [ -n "$TAS_DIR" ]; then
+            echo "Updating tas_integration at $TAS_DIR"
+            git -C "$TAS_DIR" fetch origin
+            git -C "$TAS_DIR" checkout master
+            git -C "$TAS_DIR" pull --ff-only origin master
+            tutor local exec lms pip install -e /openedx/tas_integration
+            tutor local restart lms
+            # Restart workers if they exist (ignore failure on slim installs)
+            tutor local restart lms-worker || true
+          else
+            echo "WARNING: tas_integration git checkout not found on host; MFE-only deploy"
+            echo "Withdraw Feedback will 404 until LMS plugin is updated and restarted"
+          fi
+
           tutor images build mfe --no-cache
           tutor local start -d
         EOF
