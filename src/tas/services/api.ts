@@ -340,4 +340,8 @@ export const adminSubmissionsApi = {
   ): Promise<void> => {
     await http().post(`${tasBase()}/submissions/${submissionId}/feedback/`, payload);
   },
+
+  withdrawFeedback: async (submissionId: string): Promise<void> => {
+    await http().post(`${tasBase()}/submissions/${submissionId}/feedback/withdraw/`);
+  },
 };

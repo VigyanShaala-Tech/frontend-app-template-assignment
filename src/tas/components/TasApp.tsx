@@ -397,7 +397,8 @@ export const TasApp: React.FC = () => {
           <TemplateCanvas template={selectedTemplate} readOnly={isLocked || isPreviewMode} />
         </div>
 
-        {isLocked && submission?.feedback && (
+        {isLocked && submission?.feedback
+          && (submission.feedback.status === 'approved' || submission.feedback.status === 'rejected') && (
           <div style={{ maxWidth: 900, margin: '0 auto' }}>
             <StudentFeedbackPanel feedback={submission.feedback} />
           </div>
