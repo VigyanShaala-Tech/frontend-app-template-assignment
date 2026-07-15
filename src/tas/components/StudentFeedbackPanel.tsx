@@ -1,11 +1,14 @@
 /**
  * StudentFeedbackPanel
  * Read-only instructor feedback shown to learners after submission.
+ * Renders stored Instructor Comment HTML with category headings stripped.
  */
 
 import React from 'react';
-import { Badge, Card, Form } from '@openedx/paragon';
+import { Badge, Card } from '@openedx/paragon';
 import type { SubmissionFeedback } from '../types';
+import { stripCategoryHeadingsFromComment } from '../utils/flattenStudentFeedback';
+import { InstructorCommentHtml } from './admin/InstructorCommentHtml';
 
 interface Props {
   feedback: SubmissionFeedback;
@@ -18,7 +21,7 @@ const FEEDBACK_BADGE: Record<string, string> = {
 };
 
 export const StudentFeedbackPanel: React.FC<Props> = ({ feedback }) => {
-  const comment = feedback.comment ?? '';
+  const displayComment = stripCategoryHeadingsFromComment(feedback.comment ?? '');
 
   return (
     <Card className="shadow-sm mt-4">
@@ -28,40 +31,11 @@ export const StudentFeedbackPanel: React.FC<Props> = ({ feedback }) => {
           {feedback.status}
         </Badge>
 
-        {feedback.rubrics && feedback.rubrics.length > 0 && (
-          <div className="mb-3">
-            {feedback.rubrics.map((r, i) => (
-              <div
-                key={i}
-                className="d-flex justify-content-between small py-1"
-                style={{ borderBottom: '1px solid #e9ecef' }}
-              >
-                <span>{r.criterion}</span>
-                <span>
-                  <strong>{r.score ?? r.marks ?? '—'}</strong>
-                  {(r.score != null || r.marks != null) && (
-                    <span className="text-muted ml-1">pts</span>
-                  )}
-                </span>
-              </div>
-            ))}
-          </div>
+        {!displayComment.trim() ? (
+          <div className="small text-muted">No instructor comment.</div>
+        ) : (
+          <InstructorCommentHtml comment={displayComment} className="small mb-0" />
         )}
-
-        <Form.Group className="mb-0">
-          <Form.Label className="small font-weight-bold">Instructor comment</Form.Label>
-          <Form.Control
-            as="textarea"
-            readOnly
-            rows={6}
-            value={comment}
-            style={{ whiteSpace: 'pre-wrap' }}
-            aria-label="Instructor comment"
-          />
-          {!comment && (
-            <div className="small text-muted mt-1">No instructor comment.</div>
-          )}
-        </Form.Group>
       </Card.Section>
     </Card>
   );

@@ -34,6 +34,32 @@ function http() {
   return getAuthenticatedHttpClient();
 }
 
+/** Extract a human-readable message from DRF / axios errors. */
+export function formatApiError(err: any, fallback: string): string {
+  const data = err?.response?.data;
+  if (!data) {
+    return err?.message || fallback;
+  }
+  if (typeof data === 'string') {
+    return data;
+  }
+  if (typeof data.detail === 'string') {
+    return data.detail;
+  }
+  if (Array.isArray(data.detail)) {
+    return data.detail.map(String).join('\n');
+  }
+  if (data.non_field_errors) {
+    return Array.isArray(data.non_field_errors)
+      ? data.non_field_errors.join('\n')
+      : String(data.non_field_errors);
+  }
+  const fieldErrors = Object.entries(data)
+    .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
+    .join('\n');
+  return fieldErrors || fallback;
+}
+
 function mapTemplateType(raw: any): TemplateType {
   return {
     id: String(raw.id),
@@ -250,6 +276,12 @@ export const submissionsApi = {
     return mapSubmission(data);
   },
 
+  /** Reopen a rejected submission to draft without rewriting form_data. */
+  reopen: async (id: string): Promise<Submission> => {
+    const { data } = await http().patch(`${tasBase()}/student-submission/${id}/`, { action: 'reopen' });
+    return mapSubmission(data);
+  },
+
   submit: async (id: string): Promise<Submission> => {
     const { data } = await http().post(`${tasBase()}/student-submission/${id}/submit/`);
     return mapSubmission(data);
@@ -262,9 +294,21 @@ export const submissionsApi = {
 
   getVersions: async (id: string): Promise<SubmissionVersionsResponse> => {
     const { data } = await http().get(`${tasBase()}/student-submission/${id}/versions/`);
+    const versions = (data.versions ?? []).map((v: any) => ({
+      version_number: v.version_number,
+      submitted_at: v.submitted_at ?? v.saved_at ?? null,
+      feedback_available: Boolean(v.feedback_available),
+      feedback_unavailable_reason: v.feedback_unavailable_reason ?? null,
+      feedback_status: v.feedback_status ?? null,
+      instructor_comment: v.instructor_comment ?? '',
+      pdf_url: v.pdf_url ?? null,
+      download_url: v.download_url ?? v.pdf_url ?? null,
+      form_data: v.form_data ?? {},
+      saved_at: v.saved_at ?? v.submitted_at ?? '',
+    }));
     return {
       submission_id: String(data.submission_id),
-      versions: data.versions ?? [],
+      versions,
     };
   },
 };
