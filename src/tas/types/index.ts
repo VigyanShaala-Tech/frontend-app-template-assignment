@@ -147,10 +147,20 @@ export interface Submission {
   updated_at: string;
 }
 
+export type FeedbackUnavailableReason = 'pending' | 'unlinked_historical';
+
 export interface SubmissionVersion {
   version_number: number;
-  form_data: Record<string, string>;
-  saved_at: string;
+  submitted_at: string | null;
+  feedback_available: boolean;
+  feedback_unavailable_reason: FeedbackUnavailableReason | null;
+  feedback_status: 'pending' | 'approved' | 'rejected' | null;
+  instructor_comment: string;
+  pdf_url: string | null;
+  download_url: string | null;
+  /** Legacy fields retained for older callers / instructor table field counts. */
+  form_data?: Record<string, string>;
+  saved_at?: string;
 }
 
 export interface SubmissionVersionsResponse {

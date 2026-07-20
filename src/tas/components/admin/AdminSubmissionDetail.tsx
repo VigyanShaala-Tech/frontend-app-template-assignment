@@ -14,7 +14,7 @@ import {
   Button, Badge, Spinner, Form, Card, IconButton, OverlayTrigger, Tooltip,
 } from '@openedx/paragon';
 import { ArrowBack, CheckCircle, InfoOutline } from '@openedx/paragon/icons';
-import { adminSubmissionsApi, templatesApi } from '../../services/api';
+import { adminSubmissionsApi } from '../../services/api';
 import { useTasStore } from '../../store/tasStore';
 import type { RubricCriterion, RubricFeedbackEntry } from '../../types';
 import { htmlToPlainText, plainTextToHtml } from '../../utils/commentHtmlAdapter';
@@ -23,6 +23,8 @@ import {
   parseInstructorCommentSections,
   updateCategorySection,
 } from '../../utils/instructorCommentSync';
+import { SubmissionHistory } from '../SubmissionHistory';
+import { SubmissionPdfViewer } from '../SubmissionPdfViewer';
 import { InstructorCommentEditor } from './InstructorCommentEditor';
 import { InstructorCommentHtml } from './InstructorCommentHtml';
 import { PredefinedFeedbackMultiSelect } from './PredefinedFeedbackMultiSelect';
@@ -57,21 +59,6 @@ const FEEDBACK_BORDER: Record<string, string> = {
   rejected: '#dc3545',
   approved: '#28a745',
   pending: '#6c757d',
-};
-
-const thStyle: React.CSSProperties = {
-  padding: '10px 16px',
-  textAlign: 'left',
-  fontSize: '0.78rem',
-  fontWeight: 700,
-  textTransform: 'uppercase',
-  letterSpacing: '0.05em',
-  color: '#6b7280',
-};
-
-const tdStyle: React.CSSProperties = {
-  padding: '12px 16px',
-  verticalAlign: 'middle',
 };
 
 const criteriaChipStyle: React.CSSProperties = {
@@ -197,14 +184,6 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
     hydratedSubmissionIdRef.current = submissionId;
   }, [submission, rubrics, submissionId]);
 
-  // template_id comes from the backend once deployed; fall back to fetching by template_block_id
-  const templateId = submission?.template_block_id ?? '';
-  const { data: templateDetail } = useQuery({
-    queryKey: ['template-detail', templateId],
-    queryFn: () => templatesApi.get(templateId),
-    enabled: !!templateId,
-  });
-
   const feedbackMut = useMutation({
     mutationFn: (payload: {
       feedbackStatus: 'approved' | 'rejected';
@@ -314,10 +293,6 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
     }
     feedbackMut.mutate({ feedbackStatus, rubricPayload, total });
   };
-  // Build field_id → label: prefer backend-provided map, fall back to fetched template fields
-  const fieldLabels: Record<string, string> = submission.template_fields
-    ?? Object.fromEntries((templateDetail?.fields ?? []).map((f) => [f.id, f.label]));
-  const formEntries = Object.entries(submission.form_data ?? {});
   const versionHistory: any[] = submission.version_history ?? [];
   const isSubmitted = submission.status === 'submitted';
 
@@ -345,80 +320,16 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
       {/* Body */}
       <div className="flex-grow-1 overflow-auto p-4">
         <div className="row">
-          {/* Left: PDF viewer (top) + Student answers (below) */}
+          {/* Left: Submitted PDF */}
           <div className="col-12 col-lg-6 mb-4">
-            {/* PDF inline viewer */}
             {submission.pdf && (
-              <Card className="shadow-sm mb-4">
-                <Card.Header title="Submitted PDF" />
-                <Card.Section style={{ padding: 0 }}>
-                  <iframe
-                    src={submission.pdf}
-                    title="Student submission PDF"
-                    style={{
-                      width: '100%', height: 600, border: 'none', display: 'block',
-                    }}
-                  />
-                  <div className="px-3 py-2 border-top" style={{ background: '#f8f9fa' }}>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        try {
-                          const res = await fetch(submission.pdf, { credentials: 'include' });
-                          const blob = await res.blob();
-                          const url = URL.createObjectURL(blob);
-                          const a = document.createElement('a');
-                          a.href = url;
-                          a.download = `submission_${submission.id}.pdf`;
-                          a.click();
-                          URL.revokeObjectURL(url);
-                        } catch {
-                          window.open(submission.pdf, '_blank');
-                        }
-                      }}
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        padding: '6px 14px',
-                        background: '#2563eb',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: 6,
-                        fontWeight: 600,
-                        fontSize: 13,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      ↓ Download PDF
-                    </button>
-                  </div>
-                </Card.Section>
-              </Card>
+              <SubmissionPdfViewer
+                pdfUrl={submission.pdf}
+                title="Submitted PDF"
+                iframeTitle="Student submission PDF"
+                downloadFilename={`submission_${submission.id}.pdf`}
+              />
             )}
-
-            {/* Student answers */}
-            <Card className="shadow-sm">
-              <Card.Header title="Student Answers" />
-              <Card.Section>
-                {formEntries.length === 0 && (
-                  <p className="text-muted small mb-0">No answers submitted.</p>
-                )}
-                {formEntries.map(([fieldId, value]) => (
-                  <div key={fieldId} className="mb-3">
-                    <div className="small font-weight-bold text-muted mb-1">
-                      {fieldLabels[fieldId] ?? fieldId}
-                    </div>
-                    <div
-                      className="p-2 rounded"
-                      style={{ background: '#f8f9fa', minHeight: 36, wordBreak: 'break-word' }}
-                    >
-                      {String(value) || <span className="text-muted">—</span>}
-                    </div>
-                  </div>
-                ))}
-              </Card.Section>
-            </Card>
           </div>
 
           {/* Right: Feedback form (submitted) or past feedback (rejected) */}
@@ -738,69 +649,11 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
 
         {/* Submission version history */}
         {versionHistory.length > 0 && (
-          <Card className="shadow-sm">
-            <Card.Header title="Submission History" />
-            <Card.Section>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr style={{ borderBottom: '2px solid #dee2e6' }}>
-                    <th style={thStyle}>Version</th>
-                    <th style={thStyle}>Saved At</th>
-                    <th style={thStyle}>Fields</th>
-                    <th style={thStyle}>PDF</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {versionHistory.map((v: any) => (
-                    <tr key={v.version_number} style={{ borderBottom: '1px solid #dee2e6' }}>
-                      <td style={tdStyle}>v{v.version_number}</td>
-                      <td style={{ ...tdStyle, color: '#6b7280', fontSize: '0.85rem' }}>
-                        {v.saved_at ? new Date(v.saved_at).toLocaleString() : '—'}
-                      </td>
-                      <td style={{ ...tdStyle, color: '#6b7280', fontSize: '0.85rem' }}>
-                        {Object.keys(v.form_data ?? {}).length} field(s)
-                      </td>
-                      <td style={tdStyle}>
-                        {v.pdf_url ? (
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              try {
-                                const res = await fetch(v.pdf_url, { credentials: 'include' });
-                                const blob = await res.blob();
-                                const url = URL.createObjectURL(blob);
-                                const a = document.createElement('a');
-                                a.href = url;
-                                a.download = `submission_v${v.version_number}.pdf`;
-                                a.click();
-                                URL.revokeObjectURL(url);
-                              } catch {
-                                window.open(v.pdf_url, '_blank');
-                              }
-                            }}
-                            style={{
-                              padding: '4px 10px',
-                              fontSize: 12,
-                              fontWeight: 600,
-                              background: '#2563eb',
-                              color: '#fff',
-                              border: 'none',
-                              borderRadius: 6,
-                              cursor: 'pointer',
-                            }}
-                          >
-                            ↓ PDF
-                          </button>
-                        ) : (
-                          <span style={{ color: '#9ca3af', fontSize: '0.85rem' }}>—</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </Card.Section>
-          </Card>
+          <SubmissionHistory
+            versions={versionHistory}
+            showFieldCount
+            pdfFilenamePrefix="submission"
+          />
         )}
       </div>
     </div>
