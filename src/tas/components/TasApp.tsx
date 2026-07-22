@@ -9,15 +9,19 @@
  *   5. Student hits "Save Draft" to persist progress, or "Submit" to finalise
  */
 
-import React, { useEffect, useCallback, useRef } from 'react';
+import React, { useEffect, useCallback, useRef, useState } from 'react';
+import { Button, ModalDialog, ActionRow } from '@openedx/paragon';
 
 import { TemplateSelector } from './TemplateSelector';
 import { TemplateCanvas } from './TemplateCanvas';
 import { FieldEditorPopup } from './FieldEditorPopup';
 import { PdfPoller } from './PdfPoller';
 import { StudentFeedbackPanel } from './StudentFeedbackPanel';
+import { StudentSubmissionDetail } from './StudentSubmissionDetail';
+import { SubmissionHistory } from './SubmissionHistory';
 import { useTasStore } from '../store/tasStore';
-import { submissionsApi } from '../services/api';
+import { submissionsApi, formatApiError } from '../services/api';
+import type { SubmissionVersion } from '../types';
 
 export const TasApp: React.FC = () => {
   const {
@@ -27,6 +31,8 @@ export const TasApp: React.FC = () => {
     submission,
     setSubmission,
     formData,
+    setFormData,
+    clearFormData,
     clearSelection,
     isPreviewMode,
     setPreviewMode,
@@ -38,6 +44,10 @@ export const TasApp: React.FC = () => {
 
   // Track whether createOrGetDraft has already been called for this selection
   const draftCreating = useRef(false);
+  const [versionHistory, setVersionHistory] = useState<SubmissionVersion[]>([]);
+  const [versionsLoading, setVersionsLoading] = useState(false);
+  const [selectedHistoryVersion, setSelectedHistoryVersion] = useState<SubmissionVersion | null>(null);
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
 
   // ── Responsive detection ───────────────────────────────────────────────────
   useEffect(() => {
@@ -123,6 +133,38 @@ export const TasApp: React.FC = () => {
       window.removeEventListener('focus', refresh);
     };
   }, [submission?.id, submission?.status, submission?.feedback, setSubmission]);
+
+  // Load submitted version history for the student Submission History panel
+  useEffect(() => {
+    if (!submission?.id || submission.status === 'draft') {
+      setVersionHistory([]);
+      setSelectedHistoryVersion(null);
+      return undefined;
+    }
+
+    let cancelled = false;
+    setVersionsLoading(true);
+
+    const loadVersions = () => {
+      submissionsApi.getVersions(submission.id)
+        .then((res) => {
+          if (!cancelled) setVersionHistory(res.versions);
+        })
+        .catch(() => {
+          if (!cancelled) setVersionHistory([]);
+        })
+        .finally(() => {
+          if (!cancelled) setVersionsLoading(false);
+        });
+    };
+
+    loadVersions();
+    window.addEventListener('focus', loadVersions);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('focus', loadVersions);
+    };
+  }, [submission?.id, submission?.status, submission?.feedback?.status, submission?.version_number]);
 
   // ── Print / Save as PDF ───────────────────────────────────────────────────
   const handlePrint = useCallback(() => {
@@ -234,7 +276,30 @@ export const TasApp: React.FC = () => {
     }
   }, [submission, selectedTemplate, formData, setIsSaving, setSubmission]);
 
+  // ── Edit Assignment (rejected → draft reopen) ──────────────────────────────
+  const handleEditAssignment = useCallback(async () => {
+    if (!submission || submission.status !== 'rejected') return;
+    try {
+      setIsSaving(true);
+      // Preserve intentional Clear All: if local form is empty, do not reload server answers
+      const keepCleared = Object.keys(formData).length === 0;
+      const updated = await submissionsApi.reopen(submission.id);
+      setSubmission(updated);
+      setFormData(keepCleared ? {} : (updated.form_data ?? {}));
+    } catch (err: any) {
+      alert(formatApiError(err, 'Failed to reopen assignment for editing.'));
+    } finally {
+      setIsSaving(false);
+    }
+  }, [submission, formData, setIsSaving, setSubmission, setFormData]);
+
+  const handleConfirmClearAll = useCallback(() => {
+    clearFormData();
+    setClearConfirmOpen(false);
+  }, [clearFormData]);
+
   const isLocked = submission != null && submission.status !== 'draft';
+  const isRejected = submission?.status === 'rejected';
 
   // ─── Render: no template selected → selector ──────────────────────────────
   if (!selectedTemplate) {
@@ -242,6 +307,16 @@ export const TasApp: React.FC = () => {
       <div className="h-100 overflow-auto">
         <TemplateSelector />
       </div>
+    );
+  }
+
+  // ─── Render: historical submission detail (PDF + feedback) ────────────────
+  if (isLocked && selectedHistoryVersion) {
+    return (
+      <StudentSubmissionDetail
+        version={selectedHistoryVersion}
+        onBack={() => setSelectedHistoryVersion(null)}
+      />
     );
   }
 
@@ -315,6 +390,38 @@ export const TasApp: React.FC = () => {
           >
             {isPreviewMode ? 'Edit' : 'Preview'}
           </button>
+        )}
+
+        {/* Rejected-only: reopen / clear before Save as PDF */}
+        {isRejected && (
+          <>
+            <button
+              type="button"
+              onClick={handleEditAssignment}
+              disabled={isSaving}
+              style={{
+                ...btnBase,
+                background: '#f3f4f6',
+                color: '#374151',
+                opacity: isSaving ? 0.5 : 1,
+              }}
+            >
+              Edit Assignment
+            </button>
+            <button
+              type="button"
+              onClick={() => setClearConfirmOpen(true)}
+              disabled={isSaving}
+              style={{
+                ...btnBase,
+                background: '#f3f4f6',
+                color: '#374151',
+                opacity: isSaving ? 0.5 : 1,
+              }}
+            >
+              Clear All
+            </button>
+          </>
         )}
 
         {/* Save as PDF */}
@@ -399,8 +506,35 @@ export const TasApp: React.FC = () => {
 
         {isLocked && submission?.feedback
           && (submission.feedback.status === 'approved' || submission.feedback.status === 'rejected') && (
-          <div style={{ maxWidth: 900, margin: '0 auto' }}>
+          <div style={{ maxWidth: 900, margin: '16px auto 0' }}>
             <StudentFeedbackPanel feedback={submission.feedback} />
+          </div>
+        )}
+
+        {isLocked && (
+          <div style={{ maxWidth: 900, margin: '16px auto 0' }}>
+            {versionsLoading ? (
+              <div
+                style={{
+                  background: '#fff',
+                  borderRadius: 12,
+                  boxShadow: '0 2px 12px rgba(0,0,0,0.1)',
+                  padding: 16,
+                  color: '#6b7280',
+                  fontSize: 14,
+                }}
+              >
+                Loading submission history…
+              </div>
+            ) : (
+              <SubmissionHistory
+                versions={versionHistory}
+                showFeedbackStatus
+                showPdfColumn={false}
+                showViewFeedback
+                onViewFeedback={(v) => setSelectedHistoryVersion(v as SubmissionVersion)}
+              />
+            )}
           </div>
         )}
       </div>
@@ -414,6 +548,35 @@ export const TasApp: React.FC = () => {
           <PdfPoller />
         </div>
       )}
+
+      <ModalDialog
+        title="Clear Assignment?"
+        isOpen={clearConfirmOpen}
+        onClose={() => setClearConfirmOpen(false)}
+        size="md"
+        hasCloseButton
+        isOverflowVisible={false}
+      >
+        <ModalDialog.Header>
+          <ModalDialog.Title>Clear Assignment?</ModalDialog.Title>
+        </ModalDialog.Header>
+        <ModalDialog.Body>
+          <p className="mb-0">
+            This will remove all responses currently shown in the assignment form.
+            The changes won&apos;t be saved until you save the draft or submit the assignment again.
+          </p>
+        </ModalDialog.Body>
+        <ModalDialog.Footer>
+          <ActionRow>
+            <ModalDialog.CloseButton variant="tertiary">
+              Cancel
+            </ModalDialog.CloseButton>
+            <Button variant="danger" onClick={handleConfirmClearAll}>
+              Clear All
+            </Button>
+          </ActionRow>
+        </ModalDialog.Footer>
+      </ModalDialog>
     </div>
   );
 };
