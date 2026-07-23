@@ -59,32 +59,9 @@ function parseSortDir(value: string | null): SortDir {
   return value === 'asc' ? 'asc' : DEFAULT_SORT_DIR;
 }
 
-/**
- * Sort filtered submissions. Tie-break always uses numeric submission id.
- * TODO: once backend list sorting is supported, forward sort_by / sort_dir to
- * adminSubmissionsApi.list and skip this client-side sort (keep header UI).
- */
-function sortSubmissions(rows: any[], sortBy: SortBy, sortDir: SortDir): any[] {
-  const dir = sortDir === 'asc' ? 1 : -1;
-  return [...rows].sort((a, b) => {
-    let cmp = 0;
-    if (sortBy === 'submitted_at') {
-      const aTime = a.submission_date ? new Date(a.submission_date).getTime() : NaN;
-      const bTime = b.submission_date ? new Date(b.submission_date).getTime() : NaN;
-      const aValid = !Number.isNaN(aTime);
-      const bValid = !Number.isNaN(bTime);
-      if (!aValid && !bValid) cmp = 0;
-      else if (!aValid) cmp = 1; // nulls last
-      else if (!bValid) cmp = -1;
-      else cmp = aTime - bTime;
-    } else {
-      const aCount = Number(a.resubmission_count ?? 0);
-      const bCount = Number(b.resubmission_count ?? 0);
-      cmp = aCount - bCount;
-    }
-    if (cmp !== 0) return cmp * dir;
-    return Number(a.id) - Number(b.id);
-  });
+function parsePage(value: string | null): number {
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0 ? n : 1;
 }
 
 /** Prefer backend detail/message; include HTTP status when available. */
@@ -117,37 +94,6 @@ function formatWithdrawError(error: unknown): string {
   return WITHDRAW_ERROR_FALLBACK;
 }
 
-function distinctSortedOptions(values: Array<string | null | undefined>): string[] {
-  const set = new Set<string>();
-  values.forEach((v) => {
-    const trimmed = (v ?? '').trim();
-    if (trimmed) set.add(trimmed);
-  });
-  return Array.from(set).sort((a, b) => a.localeCompare(b));
-}
-
-/** Inclusive calendar-day range on submission_date ISO strings. */
-function matchesDateRange(
-  submissionDate: string | null | undefined,
-  fromDate: string,
-  toDate: string,
-): boolean {
-  if (!fromDate && !toDate) return true;
-  if (!submissionDate) return false;
-  const submitted = new Date(submissionDate);
-  if (Number.isNaN(submitted.getTime())) return false;
-
-  if (fromDate) {
-    const start = new Date(`${fromDate}T00:00:00`);
-    if (submitted < start) return false;
-  }
-  if (toDate) {
-    const end = new Date(`${toDate}T23:59:59.999`);
-    if (submitted > end) return false;
-  }
-  return true;
-}
-
 export const AdminSubmissionsList: React.FC<Props> = ({ onView }) => {
   const { mfeContext } = useTasStore();
   const usageKey = mfeContext?.usageKey ?? '';
@@ -164,16 +110,42 @@ export const AdminSubmissionsList: React.FC<Props> = ({ onView }) => {
   const submittedBefore = searchParams.get('submitted_before') ?? '';
   const sortBy = parseSortBy(searchParams.get('sort_by'));
   const sortDir = parseSortDir(searchParams.get('sort_dir'));
+  const page = parsePage(searchParams.get('page'));
 
   const [emailInput, setEmailInput] = useState(emailFilter);
   const debouncedEmail = useDebouncedValue(emailInput, 300);
+
+  const listQueryParams = useMemo(() => ({
+    usage_key: usageKey,
+    ...(collegeFilter ? { college: collegeFilter } : {}),
+    ...(universityFilter ? { university: universityFilter } : {}),
+    ...(partnerFilter ? { partner: partnerFilter } : {}),
+    ...(debouncedEmail.trim() ? { email: debouncedEmail.trim() } : {}),
+    ...(submittedAfter ? { submitted_after: submittedAfter } : {}),
+    ...(submittedBefore ? { submitted_before: submittedBefore } : {}),
+    sort_by: sortBy,
+    sort_dir: sortDir,
+    page,
+    page_size: 24,
+  }), [
+    usageKey,
+    collegeFilter,
+    universityFilter,
+    partnerFilter,
+    debouncedEmail,
+    submittedAfter,
+    submittedBefore,
+    sortBy,
+    sortDir,
+    page,
+  ]);
 
   // Keep local email input aligned when URL email changes (e.g. Clear Filters / back navigation).
   useEffect(() => {
     setEmailInput(emailFilter);
   }, [emailFilter]);
 
-  // Persist debounced email to the URL (structured for future server-side filters).
+  // Persist debounced email to the URL; reset to page 1 when email filter changes.
   useEffect(() => {
     const current = searchParams.get('email') ?? '';
     if (debouncedEmail === current) return;
@@ -183,6 +155,7 @@ export const AdminSubmissionsList: React.FC<Props> = ({ onView }) => {
     } else {
       next.delete('email');
     }
+    next.delete('page');
     setSearchParams(next, { replace: true });
   }, [debouncedEmail]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -193,6 +166,7 @@ export const AdminSubmissionsList: React.FC<Props> = ({ onView }) => {
     } else {
       next.delete(key);
     }
+    next.delete('page');
     setSearchParams(next, { replace: true });
   };
 
@@ -200,6 +174,7 @@ export const AdminSubmissionsList: React.FC<Props> = ({ onView }) => {
     // Clear filter params only — leave sort_by / sort_dir unchanged.
     const next = new URLSearchParams(searchParams);
     FILTER_PARAM_KEYS.forEach((key) => next.delete(key));
+    next.delete('page');
     setEmailInput('');
     setSearchParams(next, { replace: true });
   };
@@ -212,9 +187,20 @@ export const AdminSubmissionsList: React.FC<Props> = ({ onView }) => {
       next.set('sort_by', field);
       next.set('sort_dir', 'desc');
     }
+    next.delete('page');
     // Persist defaults explicitly so refresh restores the active sort.
     if (!next.get('sort_by')) next.set('sort_by', DEFAULT_SORT_BY);
     if (!next.get('sort_dir')) next.set('sort_dir', DEFAULT_SORT_DIR);
+    setSearchParams(next, { replace: true });
+  };
+
+  const setPageParam = (nextPage: number) => {
+    const next = new URLSearchParams(searchParams);
+    if (nextPage <= 1) {
+      next.delete('page');
+    } else {
+      next.set('page', String(nextPage));
+    }
     setSearchParams(next, { replace: true });
   };
 
@@ -224,8 +210,15 @@ export const AdminSubmissionsList: React.FC<Props> = ({ onView }) => {
   });
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['admin-submissions', usageKey],
-    queryFn: () => adminSubmissionsApi.list({ usage_key: usageKey }),
+    queryKey: ['admin-submissions', listQueryParams],
+    queryFn: () => adminSubmissionsApi.list(listQueryParams),
+    enabled: !!usageKey,
+    refetchOnMount: 'always',
+  });
+
+  const { data: filterOptionsData } = useQuery({
+    queryKey: ['admin-submissions-filter-options', usageKey],
+    queryFn: () => adminSubmissionsApi.getFilterOptions(usageKey),
     enabled: !!usageKey,
     refetchOnMount: 'always',
   });
@@ -234,7 +227,7 @@ export const AdminSubmissionsList: React.FC<Props> = ({ onView }) => {
     mutationFn: (submissionId: string) => adminSubmissionsApi.withdrawFeedback(submissionId),
     onSuccess: (_data, submissionId) => {
       setWithdrawTarget(null);
-      queryClient.invalidateQueries({ queryKey: ['admin-submissions', usageKey] });
+      queryClient.invalidateQueries({ queryKey: ['admin-submissions'] });
       queryClient.invalidateQueries({ queryKey: ['admin-submission-detail', submissionId] });
       onView(submissionId);
     },
@@ -249,54 +242,15 @@ export const AdminSubmissionsList: React.FC<Props> = ({ onView }) => {
     },
   });
 
-  const submissions = data ?? [];
+  const totalCount = data?.count ?? 0;
+  const submissions = totalCount > 0 ? (data?.results ?? []) : [];
+  const hasNextPage = !!data?.next;
+  const hasPreviousPage = !!data?.previous;
   const isWithdrawing = withdrawMut.isPending;
 
-  const collegeOptions = useMemo(
-    () => distinctSortedOptions(submissions.map((s: any) => s.college_name)),
-    [submissions],
-  );
-  const universityOptions = useMemo(
-    () => distinctSortedOptions(submissions.map((s: any) => s.university_name)),
-    [submissions],
-  );
-  const partnerOptions = useMemo(
-    () => distinctSortedOptions(submissions.map((s: any) => s.partner_organization)),
-    [submissions],
-  );
-
-  // TODO: once backend list filtering is supported, pass
-  // { college, university, partner, email, submitted_after, submitted_before }
-  // to adminSubmissionsApi.list and remove client-side filtering.
-  const filtered = useMemo(() => {
-    const emailNeedle = debouncedEmail.trim().toLowerCase();
-    return submissions.filter((sub: any) => {
-      if (collegeFilter && (sub.college_name ?? '') !== collegeFilter) return false;
-      if (universityFilter && (sub.university_name ?? '') !== universityFilter) return false;
-      if (partnerFilter && (sub.partner_organization ?? '') !== partnerFilter) return false;
-      if (emailNeedle) {
-        const email = String(sub.email ?? '').toLowerCase();
-        if (!email.includes(emailNeedle)) return false;
-      }
-      if (!matchesDateRange(sub.submission_date, submittedAfter, submittedBefore)) return false;
-      return true;
-    });
-  }, [
-    submissions,
-    collegeFilter,
-    universityFilter,
-    partnerFilter,
-    debouncedEmail,
-    submittedAfter,
-    submittedBefore,
-  ]);
-
-  // TODO: once backend list sorting is supported, forward sort_by / sort_dir to the API
-  // and skip client-side sorting (keep clickable header UI).
-  const sorted = useMemo(
-    () => sortSubmissions(filtered, sortBy, sortDir),
-    [filtered, sortBy, sortDir],
-  );
+  const collegeOptions = filterOptionsData?.college_name ?? [];
+  const universityOptions = filterOptionsData?.university_name ?? [];
+  const partnerOptions = filterOptionsData?.partner_organization ?? [];
 
   const handleConfirmWithdraw = () => {
     if (!withdrawTarget || isWithdrawing) return;
@@ -304,8 +258,8 @@ export const AdminSubmissionsList: React.FC<Props> = ({ onView }) => {
   };
 
   const countLabel = hasActiveFilters
-    ? `${sorted.length} of ${submissions.length} submission${submissions.length !== 1 ? 's' : ''}`
-    : `${submissions.length} submission${submissions.length !== 1 ? 's' : ''}`;
+    ? `${totalCount} matching submission${totalCount !== 1 ? 's' : ''}`
+    : `${totalCount} submission${totalCount !== 1 ? 's' : ''}`;
 
   return (
     <div className="d-flex flex-column h-100">
@@ -400,13 +354,13 @@ export const AdminSubmissionsList: React.FC<Props> = ({ onView }) => {
           <div className="alert alert-danger">Failed to load submissions.</div>
         )}
 
-        {!isLoading && !isError && submissions.length === 0 && (
+        {!isLoading && !isError && totalCount === 0 && !hasActiveFilters && (
           <div className="text-center pt-5 text-muted">
             <p>No submissions yet for this block.</p>
           </div>
         )}
 
-        {!isLoading && !isError && submissions.length > 0 && filtered.length === 0 && (
+        {!isLoading && !isError && totalCount === 0 && hasActiveFilters && (
           <div className="text-center pt-5 text-muted">
             <p className="mb-2">No submissions match these filters.</p>
             <Button variant="link" size="sm" onClick={clearFilters}>
@@ -415,7 +369,7 @@ export const AdminSubmissionsList: React.FC<Props> = ({ onView }) => {
           </div>
         )}
 
-        {!isLoading && !isError && sorted.length > 0 && (
+        {!isLoading && !isError && totalCount > 0 && (
           <div className="bg-white rounded shadow-sm" style={{ overflow: 'hidden' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
@@ -453,7 +407,7 @@ export const AdminSubmissionsList: React.FC<Props> = ({ onView }) => {
                 </tr>
               </thead>
               <tbody>
-                {sorted.map((sub: any, idx: number) => {
+                {submissions.map((sub: any, idx: number) => {
                   const canWithdraw = FINALIZED_FEEDBACK.has(sub.feedback_status);
                   const rowWithdrawing = isWithdrawing && withdrawTarget?.id === String(sub.id);
 
@@ -532,6 +486,28 @@ export const AdminSubmissionsList: React.FC<Props> = ({ onView }) => {
                 })}
               </tbody>
             </table>
+
+            {(hasPreviousPage || hasNextPage) && (
+              <div className="d-flex justify-content-between align-items-center px-3 py-2 border-top">
+                <Button
+                  variant="tertiary"
+                  size="sm"
+                  disabled={!hasPreviousPage}
+                  onClick={() => setPageParam(page - 1)}
+                >
+                  Previous
+                </Button>
+                <small className="text-muted">Page {page}</small>
+                <Button
+                  variant="tertiary"
+                  size="sm"
+                  disabled={!hasNextPage}
+                  onClick={() => setPageParam(page + 1)}
+                >
+                  Next
+                </Button>
+              </div>
+            )}
           </div>
         )}
 
