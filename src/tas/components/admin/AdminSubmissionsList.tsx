@@ -5,11 +5,16 @@
  * "Withdraw Feedback" for finalized reviews (approved / rejected).
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Badge, Spinner, ModalDialog, ActionRow } from '@openedx/paragon';
+import { useSearchParams } from 'react-router-dom';
+import {
+  Button, Badge, Spinner, ModalDialog, ActionRow, Form,
+} from '@openedx/paragon';
+import { Search } from '@openedx/paragon/icons';
 import { adminSubmissionsApi } from '../../services/api';
 import { useTasStore } from '../../store/tasStore';
+import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 
 interface Props {
   onView: (submissionId: string) => void;
@@ -29,6 +34,35 @@ const STATUS_BADGE: Record<string, string> = {
 const FINALIZED_FEEDBACK = new Set(['approved', 'rejected']);
 
 const WITHDRAW_ERROR_FALLBACK = 'Failed to withdraw feedback. Please try again.';
+
+/** URL keys for submission list filters (do not touch course_id / student_id or sort_*). */
+const FILTER_PARAM_KEYS = [
+  'college',
+  'university',
+  'partner',
+  'email',
+  'submitted_after',
+  'submitted_before',
+] as const;
+
+type SortBy = 'submitted_at' | 'resubmission_count';
+type SortDir = 'asc' | 'desc';
+
+const DEFAULT_SORT_BY: SortBy = 'submitted_at';
+const DEFAULT_SORT_DIR: SortDir = 'desc';
+
+function parseSortBy(value: string | null): SortBy {
+  return value === 'resubmission_count' ? 'resubmission_count' : DEFAULT_SORT_BY;
+}
+
+function parseSortDir(value: string | null): SortDir {
+  return value === 'asc' ? 'asc' : DEFAULT_SORT_DIR;
+}
+
+function parsePage(value: string | null): number {
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0 ? n : 1;
+}
 
 /** Prefer backend detail/message; include HTTP status when available. */
 function formatWithdrawError(error: unknown): string {
@@ -64,12 +98,127 @@ export const AdminSubmissionsList: React.FC<Props> = ({ onView }) => {
   const { mfeContext } = useTasStore();
   const usageKey = mfeContext?.usageKey ?? '';
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [withdrawTarget, setWithdrawTarget] = useState<{ id: string; username: string } | null>(null);
 
+  const collegeFilter = searchParams.get('college') ?? '';
+  const universityFilter = searchParams.get('university') ?? '';
+  const partnerFilter = searchParams.get('partner') ?? '';
+  const emailFilter = searchParams.get('email') ?? '';
+  const submittedAfter = searchParams.get('submitted_after') ?? '';
+  const submittedBefore = searchParams.get('submitted_before') ?? '';
+  const sortBy = parseSortBy(searchParams.get('sort_by'));
+  const sortDir = parseSortDir(searchParams.get('sort_dir'));
+  const page = parsePage(searchParams.get('page'));
+
+  const [emailInput, setEmailInput] = useState(emailFilter);
+  const debouncedEmail = useDebouncedValue(emailInput, 300);
+
+  const listQueryParams = useMemo(() => ({
+    usage_key: usageKey,
+    ...(collegeFilter ? { college: collegeFilter } : {}),
+    ...(universityFilter ? { university: universityFilter } : {}),
+    ...(partnerFilter ? { partner: partnerFilter } : {}),
+    ...(debouncedEmail.trim() ? { email: debouncedEmail.trim() } : {}),
+    ...(submittedAfter ? { submitted_after: submittedAfter } : {}),
+    ...(submittedBefore ? { submitted_before: submittedBefore } : {}),
+    sort_by: sortBy,
+    sort_dir: sortDir,
+    page,
+    page_size: 24,
+  }), [
+    usageKey,
+    collegeFilter,
+    universityFilter,
+    partnerFilter,
+    debouncedEmail,
+    submittedAfter,
+    submittedBefore,
+    sortBy,
+    sortDir,
+    page,
+  ]);
+
+  // Keep local email input aligned when URL email changes (e.g. Clear Filters / back navigation).
+  useEffect(() => {
+    setEmailInput(emailFilter);
+  }, [emailFilter]);
+
+  // Persist debounced email to the URL; reset to page 1 when email filter changes.
+  useEffect(() => {
+    const current = searchParams.get('email') ?? '';
+    if (debouncedEmail === current) return;
+    const next = new URLSearchParams(searchParams);
+    if (debouncedEmail) {
+      next.set('email', debouncedEmail);
+    } else {
+      next.delete('email');
+    }
+    next.delete('page');
+    setSearchParams(next, { replace: true });
+  }, [debouncedEmail]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const setFilterParam = (key: typeof FILTER_PARAM_KEYS[number], value: string) => {
+    const next = new URLSearchParams(searchParams);
+    if (value) {
+      next.set(key, value);
+    } else {
+      next.delete(key);
+    }
+    next.delete('page');
+    setSearchParams(next, { replace: true });
+  };
+
+  const clearFilters = () => {
+    // Clear filter params only — leave sort_by / sort_dir unchanged.
+    const next = new URLSearchParams(searchParams);
+    FILTER_PARAM_KEYS.forEach((key) => next.delete(key));
+    next.delete('page');
+    setEmailInput('');
+    setSearchParams(next, { replace: true });
+  };
+
+  const handleSortHeaderClick = (field: SortBy) => {
+    const next = new URLSearchParams(searchParams);
+    if (sortBy === field) {
+      next.set('sort_dir', sortDir === 'asc' ? 'desc' : 'asc');
+    } else {
+      next.set('sort_by', field);
+      next.set('sort_dir', 'desc');
+    }
+    next.delete('page');
+    // Persist defaults explicitly so refresh restores the active sort.
+    if (!next.get('sort_by')) next.set('sort_by', DEFAULT_SORT_BY);
+    if (!next.get('sort_dir')) next.set('sort_dir', DEFAULT_SORT_DIR);
+    setSearchParams(next, { replace: true });
+  };
+
+  const setPageParam = (nextPage: number) => {
+    const next = new URLSearchParams(searchParams);
+    if (nextPage <= 1) {
+      next.delete('page');
+    } else {
+      next.set('page', String(nextPage));
+    }
+    setSearchParams(next, { replace: true });
+  };
+
+  const hasActiveFilters = FILTER_PARAM_KEYS.some((key) => {
+    if (key === 'email') return !!(emailInput || searchParams.get('email'));
+    return !!searchParams.get(key);
+  });
+
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['admin-submissions', usageKey],
-    queryFn: () => adminSubmissionsApi.list({ usage_key: usageKey }),
+    queryKey: ['admin-submissions', listQueryParams],
+    queryFn: () => adminSubmissionsApi.list(listQueryParams),
+    enabled: !!usageKey,
+    refetchOnMount: 'always',
+  });
+
+  const { data: filterOptionsData } = useQuery({
+    queryKey: ['admin-submissions-filter-options', usageKey],
+    queryFn: () => adminSubmissionsApi.getFilterOptions(usageKey),
     enabled: !!usageKey,
     refetchOnMount: 'always',
   });
@@ -78,7 +227,7 @@ export const AdminSubmissionsList: React.FC<Props> = ({ onView }) => {
     mutationFn: (submissionId: string) => adminSubmissionsApi.withdrawFeedback(submissionId),
     onSuccess: (_data, submissionId) => {
       setWithdrawTarget(null);
-      queryClient.invalidateQueries({ queryKey: ['admin-submissions', usageKey] });
+      queryClient.invalidateQueries({ queryKey: ['admin-submissions'] });
       queryClient.invalidateQueries({ queryKey: ['admin-submission-detail', submissionId] });
       onView(submissionId);
     },
@@ -93,22 +242,104 @@ export const AdminSubmissionsList: React.FC<Props> = ({ onView }) => {
     },
   });
 
-  const submissions = data ?? [];
+  const totalCount = data?.count ?? 0;
+  const submissions = totalCount > 0 ? (data?.results ?? []) : [];
+  const hasNextPage = !!data?.next;
+  const hasPreviousPage = !!data?.previous;
   const isWithdrawing = withdrawMut.isPending;
+
+  const collegeOptions = filterOptionsData?.college_name ?? [];
+  const universityOptions = filterOptionsData?.university_name ?? [];
+  const partnerOptions = filterOptionsData?.partner_organization ?? [];
 
   const handleConfirmWithdraw = () => {
     if (!withdrawTarget || isWithdrawing) return;
     withdrawMut.mutate(withdrawTarget.id);
   };
 
+  const countLabel = hasActiveFilters
+    ? `${totalCount} matching submission${totalCount !== 1 ? 's' : ''}`
+    : `${totalCount} submission${totalCount !== 1 ? 's' : ''}`;
+
   return (
     <div className="d-flex flex-column h-100">
       {/* Header */}
       <div className="px-4 py-3 bg-white border-bottom">
-        <h2 className="h5 mb-0">Student Submissions</h2>
-        <small className="text-muted">
-          {submissions.length} submission{submissions.length !== 1 ? 's' : ''}
-        </small>
+        <div className="d-flex align-items-start justify-content-between flex-wrap" style={{ gap: '0.75rem' }}>
+          <div>
+            <h2 className="h5 mb-0">Student Submissions</h2>
+            <small className="text-muted">{countLabel}</small>
+          </div>
+
+          <div className="d-flex align-items-center flex-wrap" style={{ gap: '0.5rem' }}>
+            <Form.Control
+              as="select"
+              size="sm"
+              value={collegeFilter}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFilterParam('college', e.target.value)}
+              style={{ width: 160 }}
+              aria-label="College Name"
+            >
+              <option value="">All colleges</option>
+              {collegeOptions.map((name) => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </Form.Control>
+
+            <Form.Control
+              as="select"
+              size="sm"
+              value={universityFilter}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFilterParam('university', e.target.value)}
+              style={{ width: 160 }}
+              aria-label="University Name"
+            >
+              <option value="">All universities</option>
+              {universityOptions.map((name) => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </Form.Control>
+
+            <Form.Control
+              as="select"
+              size="sm"
+              value={partnerFilter}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFilterParam('partner', e.target.value)}
+              style={{ width: 180 }}
+              aria-label="Partner Organization"
+            >
+              <option value="">All partners</option>
+              {partnerOptions.map((name) => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </Form.Control>
+
+            <Form.Control
+              leadingElement={<Search />}
+              value={emailInput}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmailInput(e.target.value)}
+              placeholder="Email ID…"
+              size="sm"
+              style={{ width: 180 }}
+              aria-label="Email ID"
+            />
+
+            <Form.Control
+              type="date"
+              size="sm"
+              value={submittedBefore}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFilterParam('submitted_before', e.target.value)}
+              style={{ width: 150 }}
+              aria-label="Submitted to"
+            />
+
+            {hasActiveFilters && (
+              <Button variant="primary" size="sm" onClick={clearFilters}>
+                Clear Filters
+              </Button>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Body */}
@@ -123,22 +354,55 @@ export const AdminSubmissionsList: React.FC<Props> = ({ onView }) => {
           <div className="alert alert-danger">Failed to load submissions.</div>
         )}
 
-        {!isLoading && !isError && submissions.length === 0 && (
+        {!isLoading && !isError && totalCount === 0 && !hasActiveFilters && (
           <div className="text-center pt-5 text-muted">
             <p>No submissions yet for this block.</p>
           </div>
         )}
 
-        {!isLoading && !isError && submissions.length > 0 && (
+        {!isLoading && !isError && totalCount === 0 && hasActiveFilters && (
+          <div className="text-center pt-5 text-muted">
+            <p className="mb-2">No submissions match these filters.</p>
+            <Button variant="link" size="sm" onClick={clearFilters}>
+              Clear Filters
+            </Button>
+          </div>
+        )}
+
+        {!isLoading && !isError && totalCount > 0 && (
           <div className="bg-white rounded shadow-sm" style={{ overflow: 'hidden' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ background: '#f5f7fa', borderBottom: '2px solid #dee2e6' }}>
-                  <th style={thStyle}>Student</th>
+                  <th style={thStyle}>Student Email</th>
                   <th style={thStyle}>Status</th>
                   <th style={thStyle}>Review</th>
-                  <th style={thStyle}>Submitted At</th>
-                  <th style={thStyle}>Version</th>
+                  <th style={thStyle}>
+                    <button
+                      type="button"
+                      onClick={() => handleSortHeaderClick('submitted_at')}
+                      style={sortableThButtonStyle}
+                      aria-label="Sort by Submitted At"
+                    >
+                      Submitted At
+                      {sortBy === 'submitted_at' && (
+                        <span aria-hidden="true">{sortDir === 'asc' ? ' ▲' : ' ▼'}</span>
+                      )}
+                    </button>
+                  </th>
+                  <th style={thStyle}>
+                    <button
+                      type="button"
+                      onClick={() => handleSortHeaderClick('resubmission_count')}
+                      style={sortableThButtonStyle}
+                      aria-label="Sort by Resubmission Count"
+                    >
+                      Resubmission Count
+                      {sortBy === 'resubmission_count' && (
+                        <span aria-hidden="true">{sortDir === 'asc' ? ' ▲' : ' ▼'}</span>
+                      )}
+                    </button>
+                  </th>
                   <th style={{ ...thStyle, width: 260 }}></th>
                 </tr>
               </thead>
@@ -174,7 +438,7 @@ export const AdminSubmissionsList: React.FC<Props> = ({ onView }) => {
                           : '—'}
                       </td>
                       <td style={{ ...tdStyle, color: '#6b7280', fontSize: '0.85rem' }}>
-                        v{sub.version_number ?? 1}
+                        {sub.resubmission_count ?? 0}
                       </td>
                       <td style={{ ...tdStyle, textAlign: 'right' }}>
                         <div className="d-flex justify-content-end" style={{ gap: '0.5rem' }}>
@@ -222,6 +486,28 @@ export const AdminSubmissionsList: React.FC<Props> = ({ onView }) => {
                 })}
               </tbody>
             </table>
+
+            {(hasPreviousPage || hasNextPage) && (
+              <div className="d-flex justify-content-between align-items-center px-3 py-2 border-top">
+                <Button
+                  variant="tertiary"
+                  size="sm"
+                  disabled={!hasPreviousPage}
+                  onClick={() => setPageParam(page - 1)}
+                >
+                  Previous
+                </Button>
+                <small className="text-muted">Page {page}</small>
+                <Button
+                  variant="tertiary"
+                  size="sm"
+                  disabled={!hasNextPage}
+                  onClick={() => setPageParam(page + 1)}
+                >
+                  Next
+                </Button>
+              </div>
+            )}
           </div>
         )}
 
@@ -286,6 +572,19 @@ const thStyle: React.CSSProperties = {
   letterSpacing: '0.05em',
   color: '#6b7280',
   whiteSpace: 'nowrap',
+};
+
+const sortableThButtonStyle: React.CSSProperties = {
+  padding: 0,
+  margin: 0,
+  border: 'none',
+  background: 'transparent',
+  color: 'inherit',
+  font: 'inherit',
+  fontWeight: 'inherit',
+  letterSpacing: 'inherit',
+  textTransform: 'inherit',
+  cursor: 'pointer',
 };
 
 const tdStyle: React.CSSProperties = {

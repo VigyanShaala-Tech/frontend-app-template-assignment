@@ -353,17 +353,77 @@ export const rubricsApi = {
 
 // ─── Admin: Submissions ───────────────────────────────────────────────────────
 
+export interface AdminSubmissionListRow {
+  id: number;
+  username: string;
+  email: string;
+  submission_date: string | null;
+  status: string;
+  version_number: number;
+  feedback_status: string | null;
+  college_name: string;
+  university_name: string;
+  partner_organization: string;
+  resubmission_count: number;
+}
+
+export interface AdminSubmissionListFilterOptions {
+  college_name: string[];
+  university_name: string[];
+  partner_organization: string[];
+}
+
+export interface AdminSubmissionListResponse {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: AdminSubmissionListRow[];
+}
+
 export const adminSubmissionsApi = {
   list: async (params?: {
     usage_key?: string;
     status?: SubmissionStatus;
-  }): Promise<any[]> => {
+    college?: string;
+    university?: string;
+    partner?: string;
+    email?: string;
+    submitted_after?: string;
+    submitted_before?: string;
+    sort_by?: 'submitted_at' | 'resubmission_count';
+    sort_dir?: 'asc' | 'desc';
+    page?: number;
+    page_size?: number;
+  }): Promise<AdminSubmissionListResponse> => {
     const usageKey = params?.usage_key ?? '';
+    const {
+      usage_key: _usageKey,
+      ...queryParams
+    } = params ?? {};
     const { data } = await http().get(
       `${tasBase()}/block/${encodeURIComponent(usageKey)}/submissions/`,
-      { params: { page_size: 24, ...(params?.status ? { status: params.status } : {}) } },
+      {
+        params: {
+          page_size: 24,
+          ...queryParams,
+        },
+      },
     );
-    return data.results ?? data;
+    const results = Array.isArray(data?.results) ? data.results : [];
+    const count = typeof data?.count === 'number' ? data.count : results.length;
+    return {
+      count,
+      next: data?.next ?? null,
+      previous: data?.previous ?? null,
+      results: count > 0 ? results : [],
+    };
+  },
+
+  getFilterOptions: async (usageKey: string): Promise<AdminSubmissionListFilterOptions> => {
+    const { data } = await http().get(
+      `${tasBase()}/block/${encodeURIComponent(usageKey)}/submissions/filter-options/`,
+    );
+    return data;
   },
 
   get: async (id: string): Promise<any> => {
