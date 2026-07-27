@@ -27,7 +27,16 @@ export const TemplateCanvas: React.FC<Props> = ({ template, readOnly = false }) 
   };
 
   return (
-    <div style={{ position: 'relative', width: '100%', height: 600, overflow: 'hidden' }}>
+    <div
+      className="tas-template-canvas"
+      style={{
+        position: 'relative',
+        width: '100%',
+        height: 600,
+        overflow: 'hidden',
+        ['--tas-aspect-ratio' as string]: `${imageNaturalW}/${imageNaturalH}`,
+      }}
+    >
       <TransformWrapper
         initialScale={canvasState.scale}
         initialPositionX={canvasState.positionX}
@@ -84,9 +93,11 @@ export const TemplateCanvas: React.FC<Props> = ({ template, readOnly = false }) 
             <TransformComponent
               wrapperStyle={{ width: '100%', height: '100%' }}
               contentStyle={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+              contentClass="tas-template-canvas__transform-content"
             >
               <div
                 ref={canvasRef}
+                className="tas-template-canvas__content"
                 onClick={handleCanvasClick}
                 style={{
                   position: 'relative',

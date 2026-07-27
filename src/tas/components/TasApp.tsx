@@ -339,168 +339,200 @@ export const TasApp: React.FC = () => {
   };
 
   return (
-    <div className="d-flex flex-column h-100">
+    <div className="d-flex flex-column h-100 tas-submission-root">
       {/* Toolbar */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        padding: '8px 16px',
-        background: '#fff',
-        borderBottom: '1px solid #e5e7eb',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-        flexShrink: 0,
-        gap: 8,
-        minHeight: 52,
-      }}>
-        {/* Back */}
-        {!isLocked && (
-          <button
-            type="button"
-            onClick={() => {
-              if (window.confirm('Go back? Unsaved changes will be lost.')) {
-                clearSelection();
-              }
-            }}
-            style={{ ...btnBase, background: '#f3f4f6', color: '#374151' }}
-          >
-            ← Back
-          </button>
-        )}
-
-        {/* Template name */}
-        <span style={{
-          flex: 1,
-          fontWeight: 700,
-          fontSize: 14,
-          color: '#111827',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-          margin: '0 4px',
-        }}>
-          {selectedTemplate.name}
-        </span>
-
-        {/* Preview toggle */}
-        {!isLocked && (
-          <button
-            type="button"
-            onClick={() => setPreviewMode(!isPreviewMode)}
-            style={{ ...btnBase, background: '#f3f4f6', color: '#374151' }}
-          >
-            {isPreviewMode ? 'Edit' : 'Preview'}
-          </button>
-        )}
-
-        {/* Rejected-only: reopen / clear before Save as PDF */}
-        {isRejected && (
-          <>
-            <button
-              type="button"
-              onClick={handleEditAssignment}
-              disabled={isSaving}
-              style={{
-                ...btnBase,
-                background: '#f3f4f6',
-                color: '#374151',
-                opacity: isSaving ? 0.5 : 1,
-              }}
-            >
-              Edit Assignment
-            </button>
-            <button
-              type="button"
-              onClick={() => setClearConfirmOpen(true)}
-              disabled={isSaving}
-              style={{
-                ...btnBase,
-                background: '#f3f4f6',
-                color: '#374151',
-                opacity: isSaving ? 0.5 : 1,
-              }}
-            >
-              Clear All
-            </button>
-          </>
-        )}
-
-        {/* Save as PDF */}
-        <button
-          type="button"
-          onClick={handlePrint}
-          style={{ ...btnBase, background: '#f3f4f6', color: '#374151' }}
-        >
-          ↓ Save as PDF
-        </button>
-
-        {/* Save Draft */}
-        {!isLocked && (
-          <button
-            type="button"
-            onClick={handleSaveDraft}
-            disabled={isSaving || !submission}
-            style={{
-              ...btnBase,
-              background: '#fff',
-              color: '#2563eb',
-              border: '1.5px solid #2563eb',
-              opacity: (isSaving || !submission) ? 0.5 : 1,
-            }}
-          >
-            {isSaving ? 'Saving…' : 'Save Draft'}
-          </button>
-        )}
-
-        {/* Submit */}
-        {!isLocked && (
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={isSaving || !submission}
-            style={{
-              ...btnBase,
-              background: '#2563eb',
-              color: '#fff',
-              opacity: (isSaving || !submission) ? 0.5 : 1,
-            }}
-          >
-            Submit
-          </button>
-        )}
-
-        {isLocked && (
-          <span style={{
-            display: 'inline-flex',
+      <div
+        className="tas-toolbar"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          padding: '8px 16px',
+          background: '#fff',
+          borderBottom: '1px solid #e5e7eb',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+          flexShrink: 0,
+          gap: 8,
+          minHeight: 52,
+        }}
+      >
+        <div
+          className="tas-toolbar__primary"
+          style={{
+            display: 'flex',
             alignItems: 'center',
-            gap: 6,
-            background: '#dcfce7',
-            color: '#15803d',
-            borderRadius: 8,
-            padding: '6px 14px',
-            fontWeight: 600,
-            fontSize: 13,
-          }}>
-            ✓ Submitted
+            gap: 8,
+            flex: 1,
+            minWidth: 0,
+          }}
+        >
+          {/* Back */}
+          {!isLocked && (
+            <button
+              type="button"
+              onClick={() => {
+                if (window.confirm('Go back? Unsaved changes will be lost.')) {
+                  clearSelection();
+                }
+              }}
+              style={{ ...btnBase, background: '#f3f4f6', color: '#374151' }}
+            >
+              ← Back
+            </button>
+          )}
+
+          {/* Template name */}
+          <span
+            className="tas-toolbar__title"
+            style={{
+              flex: 1,
+              fontWeight: 700,
+              fontSize: 14,
+              color: '#111827',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              margin: '0 4px',
+            }}
+          >
+            {selectedTemplate.name}
           </span>
-        )}
+        </div>
+
+        <div
+          className="tas-toolbar__actions"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+          }}
+        >
+          {/* Preview toggle */}
+          {!isLocked && (
+            <button
+              type="button"
+              onClick={() => setPreviewMode(!isPreviewMode)}
+              style={{ ...btnBase, background: '#f3f4f6', color: '#374151' }}
+            >
+              {isPreviewMode ? 'Edit' : 'Preview'}
+            </button>
+          )}
+
+          {/* Rejected-only: reopen / clear before Save as PDF */}
+          {isRejected && (
+            <>
+              <button
+                type="button"
+                onClick={handleEditAssignment}
+                disabled={isSaving}
+                style={{
+                  ...btnBase,
+                  background: '#f3f4f6',
+                  color: '#374151',
+                  opacity: isSaving ? 0.5 : 1,
+                }}
+              >
+                Edit Assignment
+              </button>
+              <button
+                type="button"
+                onClick={() => setClearConfirmOpen(true)}
+                disabled={isSaving}
+                style={{
+                  ...btnBase,
+                  background: '#f3f4f6',
+                  color: '#374151',
+                  opacity: isSaving ? 0.5 : 1,
+                }}
+              >
+                Clear All
+              </button>
+            </>
+          )}
+
+          {/* Save as PDF */}
+          <button
+            type="button"
+            onClick={handlePrint}
+            style={{ ...btnBase, background: '#f3f4f6', color: '#374151' }}
+          >
+            ↓ Save as PDF
+          </button>
+
+          {/* Save Draft */}
+          {!isLocked && (
+            <button
+              type="button"
+              onClick={handleSaveDraft}
+              disabled={isSaving || !submission}
+              style={{
+                ...btnBase,
+                background: '#fff',
+                color: '#2563eb',
+                border: '1.5px solid #2563eb',
+                opacity: (isSaving || !submission) ? 0.5 : 1,
+              }}
+            >
+              {isSaving ? 'Saving…' : 'Save Draft'}
+            </button>
+          )}
+
+          {/* Submit */}
+          {!isLocked && (
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={isSaving || !submission}
+              style={{
+                ...btnBase,
+                background: '#2563eb',
+                color: '#fff',
+                opacity: (isSaving || !submission) ? 0.5 : 1,
+              }}
+            >
+              Submit
+            </button>
+          )}
+
+          {isLocked && (
+            <span style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              background: '#dcfce7',
+              color: '#15803d',
+              borderRadius: 8,
+              padding: '6px 14px',
+              fontWeight: 600,
+              fontSize: 13,
+            }}>
+              ✓ Submitted
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Outer page — scrollable grey background */}
-      <div style={{
-        flex: 1,
-        overflow: 'auto',
-        background: '#e5e7eb',
-        padding: '24px',
-      }}>
+      <div
+        className="tas-submission-page"
+        style={{
+          flex: 1,
+          overflow: 'auto',
+          background: '#e5e7eb',
+          padding: '24px',
+        }}
+      >
         {/* Inner container — white card that holds the canvas */}
-        <div style={{
-          background: '#fff',
-          borderRadius: 12,
-          boxShadow: '0 2px 12px rgba(0,0,0,0.1)',
-          padding: 16,
-          maxWidth: 900,
-          margin: '0 auto',
-        }}>
+        <div
+          className="tas-submission-card"
+          style={{
+            background: '#fff',
+            borderRadius: 12,
+            boxShadow: '0 2px 12px rgba(0,0,0,0.1)',
+            padding: 16,
+            maxWidth: 900,
+            margin: '0 auto',
+          }}
+        >
           <TemplateCanvas template={selectedTemplate} readOnly={isLocked || isPreviewMode} />
         </div>
 
