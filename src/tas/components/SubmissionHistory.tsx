@@ -113,91 +113,95 @@ export const SubmissionHistory: React.FC<Props> = ({
   showViewFeedback = false,
   onViewFeedback,
   pdfFilenamePrefix = 'submission',
-}) => (
+}) => {
+  const timestampLabel = showFeedbackStatus ? 'Submitted At' : 'Saved At';
+
+  return (
   <Card className="shadow-sm">
     <Card.Header title={title} />
     <Card.Section>
       {versions.length === 0 ? (
         <p className="text-muted small mb-0">No submission history yet.</p>
       ) : (
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ borderBottom: '2px solid #dee2e6' }}>
-              <th style={thStyle}>Version</th>
-              <th style={thStyle}>{showFeedbackStatus ? 'Submitted At' : 'Saved At'}</th>
-              {showFieldCount && <th style={thStyle}>Fields</th>}
-              {showFeedbackStatus && <th style={thStyle}>Submission Status</th>}
-              {showPdfColumn && <th style={thStyle}>PDF</th>}
-              {showViewFeedback && <th style={thStyle}>Feedback</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {versions.map((v) => {
-              const pdfUrl = v.pdf_url || v.download_url || null;
-              return (
-                <tr key={v.version_number} style={{ borderBottom: '1px solid #dee2e6' }}>
-                  <td style={tdStyle}>v{v.version_number}</td>
-                  <td style={{ ...tdStyle, color: '#6b7280', fontSize: '0.85rem' }}>
-                    {formatTimestamp(v)}
-                  </td>
-                  {showFieldCount && (
-                    <td style={{ ...tdStyle, color: '#6b7280', fontSize: '0.85rem' }}>
-                      {Object.keys(v.form_data ?? {}).length} field(s)
+        <div className="tas-submission-history">
+          <table className="tas-submission-history-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid #dee2e6' }}>
+                <th style={thStyle}>{timestampLabel}</th>
+                {showFieldCount && <th style={thStyle}>Fields</th>}
+                {showFeedbackStatus && <th style={thStyle}>Submission Status</th>}
+                {showPdfColumn && <th style={thStyle}>PDF</th>}
+                {showViewFeedback && <th style={thStyle}>Feedback</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {versions.map((v) => {
+                const pdfUrl = v.pdf_url || v.download_url || null;
+                return (
+                  <tr key={v.version_number} style={{ borderBottom: '1px solid #dee2e6' }}>
+                    <td style={{ ...tdStyle, color: '#6b7280', fontSize: '0.85rem' }} data-label={timestampLabel}>
+                      {formatTimestamp(v)}
                     </td>
-                  )}
-                  {showFeedbackStatus && (
-                    <td style={tdStyle}>{feedbackStatusCell(v)}</td>
-                  )}
-                  {showPdfColumn && (
-                    <td style={tdStyle}>
-                      {pdfUrl ? (
-                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                          {showViewPdf && (
+                    {showFieldCount && (
+                      <td style={{ ...tdStyle, color: '#6b7280', fontSize: '0.85rem' }} data-label="Fields">
+                        {Object.keys(v.form_data ?? {}).length} field(s)
+                      </td>
+                    )}
+                    {showFeedbackStatus && (
+                      <td style={tdStyle} data-label="Submission Status">{feedbackStatusCell(v)}</td>
+                    )}
+                    {showPdfColumn && (
+                      <td style={tdStyle} data-label="PDF">
+                        {pdfUrl ? (
+                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                            {showViewPdf && (
+                              <button
+                                type="button"
+                                onClick={() => window.open(pdfUrl, '_blank')}
+                                style={linkBtnStyle}
+                              >
+                                View PDF
+                              </button>
+                            )}
                             <button
                               type="button"
-                              onClick={() => window.open(pdfUrl, '_blank')}
-                              style={linkBtnStyle}
+                              onClick={() => {
+                                void downloadPdf(pdfUrl, `${pdfFilenamePrefix}_v${v.version_number}.pdf`);
+                              }}
+                              style={pdfBtnStyle}
                             >
-                              View PDF
+                              ↓ PDF
                             </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              void downloadPdf(pdfUrl, `${pdfFilenamePrefix}_v${v.version_number}.pdf`);
-                            }}
-                            style={pdfBtnStyle}
-                          >
-                            ↓ PDF
-                          </button>
-                        </div>
-                      ) : (
-                        <span style={{ color: '#9ca3af', fontSize: '0.85rem' }}>—</span>
-                      )}
-                    </td>
-                  )}
-                  {showViewFeedback && (
-                    <td style={tdStyle}>
-                      <button
-                        type="button"
-                        disabled={!v.feedback_available}
-                        onClick={() => onViewFeedback?.(v)}
-                        style={{
-                          ...linkBtnStyle,
-                          opacity: v.feedback_available ? 1 : 0.45,
-                          cursor: v.feedback_available ? 'pointer' : 'not-allowed',
-                        }}
-                      >
-                        View Feedback
-                      </button>
-                    </td>
-                  )}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                          </div>
+                        ) : (
+                          <span style={{ color: '#9ca3af', fontSize: '0.85rem' }}>—</span>
+                        )}
+                      </td>
+                    )}
+                    {showViewFeedback && (
+                      <td style={tdStyle} data-label="Feedback">
+                        <button
+                          type="button"
+                          disabled={!v.feedback_available}
+                          onClick={() => onViewFeedback?.(v)}
+                          style={{
+                            ...linkBtnStyle,
+                            opacity: v.feedback_available ? 1 : 0.45,
+                            cursor: v.feedback_available ? 'pointer' : 'not-allowed',
+                          }}
+                        >
+                          View Feedback
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </Card.Section>
   </Card>
-);
+  );
+};
