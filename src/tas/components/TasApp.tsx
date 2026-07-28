@@ -21,6 +21,7 @@ import { StudentSubmissionDetail } from './StudentSubmissionDetail';
 import { SubmissionHistory } from './SubmissionHistory';
 import { useTasStore } from '../store/tasStore';
 import { submissionsApi, formatApiError } from '../services/api';
+import { navigateBackToAssignment } from '../utils/navigateBackToAssignment';
 import type { SubmissionVersion } from '../types';
 
 export const TasApp: React.FC = () => {
@@ -371,7 +372,7 @@ export const TasApp: React.FC = () => {
               type="button"
               onClick={() => {
                 if (window.confirm('Go back? Unsaved changes will be lost.')) {
-                  clearSelection();
+                  navigateBackToAssignment(mfeContext);
                 }
               }}
               style={{ ...btnBase, background: '#f3f4f6', color: '#374151' }}
