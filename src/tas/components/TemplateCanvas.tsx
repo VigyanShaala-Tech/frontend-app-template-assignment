@@ -17,7 +17,7 @@ interface Props {
 
 export const TemplateCanvas: React.FC<Props> = ({ template, readOnly = false }) => {
   const canvasRef = useRef<HTMLDivElement>(null);
-  const { canvasState, setCanvasState, selectedFieldId, setSelectedFieldId } = useTasStore();
+  const { canvasState, setCanvasState, selectedFieldId, setSelectedFieldId, isMobile } = useTasStore();
 
   const imageNaturalW = template.image_width || 794;
   const imageNaturalH = template.image_height || 1123;
@@ -46,7 +46,7 @@ export const TemplateCanvas: React.FC<Props> = ({ template, readOnly = false }) 
         limitToBounds={false}
         centerOnInit
         wheel={{ disabled: true }}
-        pinch={{ disabled: true }}
+        pinch={{ disabled: !isMobile }}
         onTransformed={(ref) => {
           setCanvasState({
             scale: ref.state.scale,
