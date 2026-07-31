@@ -1,18 +1,171 @@
 /**
  * FieldEditorPopup
- * Bottom sheet on mobile, centered modal on desktop.
+ * Floating draggable modal on mobile, centered modal on desktop.
  * Renders the correct input type based on field.type.
  */
 
-import React, { useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import {
+  motion,
+  AnimatePresence,
+  useDragControls,
+  useMotionValue,
+} from 'framer-motion';
+import { useVisualViewportRect } from '../hooks/useVisualViewportRect';
+import type { VisualViewportRect } from '../hooks/useVisualViewportRect';
 import { useTasStore } from '../store/tasStore';
 import type { FormField } from '../types';
+import {
+  clampOffsetToConstraints,
+  getDefaultAnchor,
+  getDragConstraints,
+  type Point,
+} from '../utils/mobilePopupConstraints';
 
 interface Props {
   field: FormField | null;
   fields: FormField[];
 }
+
+const handleInputFocus = (e: React.FocusEvent<HTMLElement>) => {
+  e.target.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+};
+
+interface MobileFloatingPopupProps {
+  viewportRect: VisualViewportRect;
+  fieldId: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}
+
+const MobileFloatingPopup: React.FC<MobileFloatingPopupProps> = ({
+  viewportRect,
+  fieldId,
+  onClose,
+  children,
+}) => {
+  const dragControls = useDragControls();
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+  const modalRef = useRef<HTMLDivElement>(null);
+  const [modalSize, setModalSize] = useState({ width: 280, height: 200 });
+  const [anchor, setAnchor] = useState<Point>({ x: 12, y: 12 });
+
+  useLayoutEffect(() => {
+    const el = modalRef.current;
+    if (!el) return undefined;
+
+    const updateSize = () => {
+      setModalSize({ width: el.offsetWidth, height: el.offsetHeight });
+    };
+
+    updateSize();
+    const ro = new ResizeObserver(updateSize);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [fieldId]);
+
+  useLayoutEffect(() => {
+    const el = modalRef.current;
+    if (!el) return;
+    const { offsetWidth: w, offsetHeight: h } = el;
+    setAnchor(getDefaultAnchor(viewportRect, w, h));
+    x.set(0);
+    y.set(0);
+    // Reset anchor/offset only when a field editor opens (fieldId), not on viewport resize.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fieldId, x, y]);
+
+  const dragConstraints = useMemo(
+    () => getDragConstraints(viewportRect, modalSize.width, modalSize.height, anchor),
+    [viewportRect, modalSize.width, modalSize.height, anchor],
+  );
+
+  useEffect(() => {
+    const constraints = getDragConstraints(
+      viewportRect,
+      modalSize.width,
+      modalSize.height,
+      anchor,
+    );
+    const clamped = clampOffsetToConstraints({ x: x.get(), y: y.get() }, constraints);
+    x.set(clamped.x);
+    y.set(clamped.y);
+  }, [viewportRect, modalSize.width, modalSize.height, anchor, x, y]);
+
+  return (
+    <>
+      <motion.div
+        style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 40 }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+      />
+      <motion.div
+        ref={modalRef}
+        drag
+        dragControls={dragControls}
+        dragListener={false}
+        dragMomentum={false}
+        dragElastic={0}
+        dragConstraints={dragConstraints}
+        style={{
+          x,
+          y,
+          position: 'fixed',
+          left: viewportRect.left + anchor.x,
+          top: viewportRect.top + anchor.y,
+          width: '86vw',
+          maxWidth: 300,
+          maxHeight: viewportRect.height - 24,
+          background: '#fff',
+          borderRadius: 16,
+          boxShadow: '0 8px 40px rgba(0,0,0,0.18)',
+          zIndex: 50,
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          boxSizing: 'border-box',
+        }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.15 }}
+      >
+        <div
+          role="button"
+          tabIndex={-1}
+          aria-label="Drag to move popup"
+          onPointerDown={(e) => dragControls.start(e)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 6,
+            padding: '6px 12px 4px',
+            cursor: 'grab',
+            touchAction: 'none',
+            userSelect: 'none',
+            color: '#9ca3af',
+            fontSize: 10,
+            fontWeight: 600,
+            letterSpacing: '0.02em',
+          }}
+        >
+          <span style={{ fontSize: 13, lineHeight: 1, color: '#c4c9d4' }}>⠿</span>
+          Drag to move
+        </div>
+        {children}
+      </motion.div>
+    </>
+  );
+};
 
 export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
   const {
@@ -23,6 +176,8 @@ export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
     setFormValue,
     isMobile,
   } = useTasStore();
+
+  const viewportRect = useVisualViewportRect(isFieldEditorOpen && isMobile);
 
   const currentIndex = field ? fields.findIndex((f) => f.id === field.id) : -1;
   const hasPrev = currentIndex > 0;
@@ -56,8 +211,8 @@ export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
     width: '100%',
     borderRadius: 10,
     border: '1.5px solid #d1d5db',
-    padding: '12px 14px',
-    fontSize: 15,
+    padding: isMobile ? '8px 10px' : '12px 14px',
+    fontSize: isMobile ? 13 : 15,
     outline: 'none',
     boxSizing: 'border-box',
     fontFamily: 'inherit',
@@ -80,6 +235,7 @@ export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
             style={{ ...inputStyle, cursor: 'pointer' }}
             value={localValue}
             onChange={(e) => setLocalValue(e.target.value)}
+            onFocus={handleInputFocus}
           >
             <option value="">-- Select --</option>
             {(field.options ?? []).map((opt) => (
@@ -95,6 +251,7 @@ export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
             value={localValue}
             onChange={(e) => setLocalValue(e.target.value)}
             onKeyDown={handleKeyDown}
+            onFocus={handleInputFocus}
             autoFocus
           />
         );
@@ -107,6 +264,7 @@ export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
             value={localValue}
             onChange={(e) => setLocalValue(e.target.value)}
             onKeyDown={handleKeyDown}
+            onFocus={handleInputFocus}
             autoFocus
           />
         );
@@ -114,14 +272,27 @@ export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
         return (
           <>
             <textarea
-              style={{ ...inputStyle, minHeight: 120, resize: 'vertical', lineHeight: 1.6 }}
+              style={{
+                ...inputStyle,
+                minHeight: isMobile ? 56 : 120,
+                resize: isMobile ? 'none' : 'vertical',
+                lineHeight: 1.6,
+              }}
               placeholder={field.placeholder || `Enter ${field.label}`}
               value={localValue}
               maxLength={maxChars}
               onChange={(e) => handleChange(e.target.value)}
+              onFocus={handleInputFocus}
               autoFocus
             />
-            <div style={{ fontSize: 12, color: localValue.length >= maxChars ? '#ef4444' : '#9ca3af', textAlign: 'right', marginTop: -8 }}>
+            <div
+              style={{
+                fontSize: isMobile ? 10 : 12,
+                color: localValue.length >= maxChars ? '#ef4444' : '#9ca3af',
+                textAlign: 'right',
+                marginTop: isMobile ? 4 : -8,
+              }}
+            >
               {localValue.length}/{maxChars}
             </div>
           </>
@@ -130,14 +301,37 @@ export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
   };
 
   const content = (
-    <div style={{ padding: '20px 24px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div
+      style={{
+        padding: isMobile ? '10px 12px 12px' : '20px 24px 24px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: isMobile ? 8 : 16,
+      }}
+    >
       <div>
-        <h3 style={{ fontSize: 17, fontWeight: 700, color: '#111827', margin: 0 }}>
+        <h3
+          style={{
+            fontSize: isMobile ? 14 : 17,
+            fontWeight: 700,
+            color: '#111827',
+            margin: 0,
+          }}
+        >
           {field.label}
           {field.required && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
         </h3>
         {field.placeholder && (
-          <p style={{ fontSize: 13, color: '#6b7280', marginTop: 4, marginBottom: 0 }}>{field.placeholder}</p>
+          <p
+            style={{
+              fontSize: isMobile ? 11 : 13,
+              color: '#6b7280',
+              marginTop: 4,
+              marginBottom: 0,
+            }}
+          >
+            {field.placeholder}
+          </p>
         )}
       </div>
 
@@ -151,10 +345,15 @@ export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
             disabled={!hasPrev}
             onClick={() => saveAndNavigate(fields[currentIndex - 1])}
             style={{
-              flex: 1, padding: '8px 0', borderRadius: 10,
-              border: '1.5px solid #d1d5db', background: '#fff',
-              color: hasPrev ? '#374151' : '#d1d5db', fontWeight: 600,
-              fontSize: 13, cursor: hasPrev ? 'pointer' : 'default',
+              flex: 1,
+              padding: isMobile ? '6px 0' : '8px 0',
+              borderRadius: 10,
+              border: '1.5px solid #d1d5db',
+              background: '#fff',
+              color: hasPrev ? '#374151' : '#d1d5db',
+              fontWeight: 600,
+              fontSize: 13,
+              cursor: hasPrev ? 'pointer' : 'default',
             }}
           >
             ← Prev
@@ -167,10 +366,15 @@ export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
             disabled={!hasNext}
             onClick={() => saveAndNavigate(fields[currentIndex + 1])}
             style={{
-              flex: 1, padding: '8px 0', borderRadius: 10,
-              border: '1.5px solid #d1d5db', background: '#fff',
-              color: hasNext ? '#374151' : '#d1d5db', fontWeight: 600,
-              fontSize: 13, cursor: hasNext ? 'pointer' : 'default',
+              flex: 1,
+              padding: isMobile ? '6px 0' : '8px 0',
+              borderRadius: 10,
+              border: '1.5px solid #d1d5db',
+              background: '#fff',
+              color: hasNext ? '#374151' : '#d1d5db',
+              fontWeight: 600,
+              fontSize: 13,
+              cursor: hasNext ? 'pointer' : 'default',
             }}
           >
             Next →
@@ -178,14 +382,20 @@ export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 10 }}>
+      <div style={{ display: 'flex', gap: isMobile ? 6 : 10 }}>
         <button
           type="button"
           onClick={closeFieldEditor}
           style={{
-            flex: 1, padding: '10px 0', borderRadius: 10,
-            border: '1.5px solid #d1d5db', background: '#fff',
-            color: '#374151', fontWeight: 600, fontSize: 14, cursor: 'pointer',
+            flex: 1,
+            padding: isMobile ? '6px 0' : '10px 0',
+            borderRadius: 10,
+            border: '1.5px solid #d1d5db',
+            background: '#fff',
+            color: '#374151',
+            fontWeight: 600,
+            fontSize: isMobile ? 12 : 14,
+            cursor: 'pointer',
           }}
         >
           Cancel
@@ -194,9 +404,15 @@ export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
           type="button"
           onClick={handleSave}
           style={{
-            flex: 1, padding: '10px 0', borderRadius: 10,
-            border: 'none', background: '#2563eb',
-            color: '#fff', fontWeight: 600, fontSize: 14, cursor: 'pointer',
+            flex: 1,
+            padding: isMobile ? '6px 0' : '10px 0',
+            borderRadius: 10,
+            border: 'none',
+            background: '#2563eb',
+            color: '#fff',
+            fontWeight: 600,
+            fontSize: isMobile ? 12 : 14,
+            cursor: 'pointer',
             boxShadow: '0 1px 3px rgba(37,99,235,0.3)',
           }}
         >
@@ -210,50 +426,43 @@ export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
     return (
       <AnimatePresence>
         {isFieldEditorOpen && (
-          <>
-            <motion.div
-              style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 40 }}
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={closeFieldEditor}
-            />
-            <motion.div
-              style={{
-                position: 'fixed', bottom: 0, left: 0, right: 0,
-                background: '#fff', borderRadius: '24px 24px 0 0',
-                boxShadow: '0 -4px 24px rgba(0,0,0,0.15)',
-                zIndex: 50, maxHeight: '85vh', overflowY: 'auto',
-              }}
-              initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
-              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 12, paddingBottom: 4 }}>
-                <div style={{ width: 40, height: 4, background: '#d1d5db', borderRadius: 99 }} />
-              </div>
-              {content}
-            </motion.div>
-          </>
+          <MobileFloatingPopup
+            key={field.id}
+            fieldId={field.id}
+            viewportRect={viewportRect}
+            onClose={closeFieldEditor}
+          >
+            {content}
+          </MobileFloatingPopup>
         )}
       </AnimatePresence>
     );
   }
 
-  // Desktop: centered modal
+  // Desktop: centered modal (unchanged)
   return (
     <AnimatePresence>
       {isFieldEditorOpen && (
         <>
           <motion.div
             style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 40 }}
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             onClick={closeFieldEditor}
           />
           <motion.div
             style={{
-              position: 'fixed', left: '50%', top: '50%',
+              position: 'fixed',
+              left: '50%',
+              top: '50%',
               transform: 'translate(-50%, -50%)',
-              width: '100%', maxWidth: 480,
-              background: '#fff', borderRadius: 16,
-              boxShadow: '0 8px 40px rgba(0,0,0,0.18)', zIndex: 50,
+              width: '100%',
+              maxWidth: 480,
+              background: '#fff',
+              borderRadius: 16,
+              boxShadow: '0 8px 40px rgba(0,0,0,0.18)',
+              zIndex: 50,
             }}
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
