@@ -109,8 +109,8 @@ export const FieldOverlay: React.FC<FieldOverlayProps> = ({
         transition: 'border-color 0.15s ease, background-color 0.15s ease',
       }}
     >
-      {/* Label badge above the field */}
-      {!isInactive && (
+      {/* Label badge above the field (hidden on mobile; shown in FieldEditorPopup instead) */}
+      {!isInactive && !isMobile && (
         <div
           style={{
             position: 'absolute',
@@ -152,8 +152,8 @@ export const FieldOverlay: React.FC<FieldOverlayProps> = ({
         </div>
       )}
 
-      {/* Tap hint */}
-      {!hasValue && !isInactive && (
+      {/* Tap hint (hidden on mobile; dashed border indicates empty fields) */}
+      {!hasValue && !isInactive && !isMobile && (
         <div
           style={{
             position: 'absolute',
