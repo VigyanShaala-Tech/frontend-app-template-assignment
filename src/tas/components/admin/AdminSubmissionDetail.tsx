@@ -25,6 +25,10 @@ import {
 } from '../../utils/instructorCommentSync';
 import { SubmissionHistory } from '../SubmissionHistory';
 import { SubmissionPdfViewer } from '../SubmissionPdfViewer';
+import {
+  formatFeedbackStatusLabel,
+  formatSubmissionStatusLabel,
+} from '../../utils/statusLabels';
 import { InstructorCommentEditor } from './InstructorCommentEditor';
 import { InstructorCommentHtml } from './InstructorCommentHtml';
 import { PredefinedFeedbackMultiSelect } from './PredefinedFeedbackMultiSelect';
@@ -313,7 +317,7 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
           </small>
         </div>
         <Badge variant={STATUS_BADGE[submission.status] ?? 'secondary'}>
-          {submission.status}
+          {formatSubmissionStatusLabel(submission.status)}
         </Badge>
       </div>
 
@@ -341,7 +345,7 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
                 {!isSubmitted && submission.feedback && (
                   <div>
                     <Badge variant={FEEDBACK_BADGE[submission.feedback.status] ?? 'secondary'} className="mb-2">
-                      {submission.feedback.status}
+                      {formatFeedbackStatusLabel(submission.feedback.status)}
                     </Badge>
                     {submission.feedback.rubrics?.length > 0 && (
                       <div className="mt-2 mb-2">
@@ -617,7 +621,7 @@ export const AdminSubmissionDetail: React.FC<Props> = ({ submissionId, onBack })
                 >
                   <div className="d-flex align-items-center mb-1" style={{ gap: '0.5rem' }}>
                     <Badge variant={FEEDBACK_BADGE[v.status] ?? 'secondary'}>
-                      {v.status}
+                      {formatFeedbackStatusLabel(v.status)}
                     </Badge>
                     <small className="text-muted">
                       v{v.version_number}{v.created ? ` · ${new Date(v.created).toLocaleString()}` : ''}
