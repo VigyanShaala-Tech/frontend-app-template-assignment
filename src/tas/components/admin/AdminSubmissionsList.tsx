@@ -15,20 +15,20 @@ import { Search } from '@openedx/paragon/icons';
 import { adminSubmissionsApi } from '../../services/api';
 import { useTasStore } from '../../store/tasStore';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
+import { formatSubmissionStatusLabel } from '../../utils/statusLabels';
 
 interface Props {
   onView: (submissionId: string) => void;
 }
 
-const FEEDBACK_BADGE: Record<string, string> = {
-  pending: 'secondary',
-  approved: 'success',
-  rejected: 'danger',
-};
-
 const STATUS_BADGE: Record<string, string> = {
   submitted: 'primary',
   rejected: 'danger',
+};
+
+const LINK_ACTION_STYLE: React.CSSProperties = {
+  fontWeight: 700,
+  textDecoration: 'underline',
 };
 
 const FINALIZED_FEEDBACK = new Set(['approved', 'rejected']);
@@ -376,7 +376,6 @@ export const AdminSubmissionsList: React.FC<Props> = ({ onView }) => {
                 <tr style={{ background: '#f5f7fa', borderBottom: '2px solid #dee2e6' }}>
                   <th style={thStyle}>Student Email</th>
                   <th style={thStyle}>Status</th>
-                  <th style={thStyle}>Review</th>
                   <th style={thStyle}>
                     <button
                       type="button"
@@ -424,12 +423,7 @@ export const AdminSubmissionsList: React.FC<Props> = ({ onView }) => {
                       </td>
                       <td style={tdStyle}>
                         <Badge variant={STATUS_BADGE[sub.status] ?? 'secondary'}>
-                          {sub.status}
-                        </Badge>
-                      </td>
-                      <td style={tdStyle}>
-                        <Badge variant={FEEDBACK_BADGE[sub.feedback_status] ?? 'secondary'}>
-                          {sub.feedback_status ?? 'pending'}
+                          {formatSubmissionStatusLabel(sub.status)}
                         </Badge>
                       </td>
                       <td style={{ ...tdStyle, color: '#6b7280', fontSize: '0.85rem' }}>
@@ -446,7 +440,7 @@ export const AdminSubmissionsList: React.FC<Props> = ({ onView }) => {
                             <Button
                               variant="tertiary"
                               size="sm"
-                              style={{ color: '#dc3545' }}
+                              style={{ ...LINK_ACTION_STYLE, color: '#dc3545' }}
                               disabled={isWithdrawing}
                               onClick={() => setWithdrawTarget({
                                 id: String(sub.id),
@@ -473,6 +467,7 @@ export const AdminSubmissionsList: React.FC<Props> = ({ onView }) => {
                             <Button
                               variant="tertiary"
                               size="sm"
+                              style={LINK_ACTION_STYLE}
                               onClick={() => onView(String(sub.id))}
                               disabled={isWithdrawing}
                             >

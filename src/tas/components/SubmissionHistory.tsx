@@ -7,6 +7,7 @@ import React from 'react';
 import { Badge, Card } from '@openedx/paragon';
 import type { FeedbackUnavailableReason, SubmissionVersion } from '../types';
 import { downloadPdf } from '../utils/downloadPdf';
+import { formatFeedbackStatusLabel } from '../utils/statusLabels';
 
 export type SubmissionHistoryItem = Pick<SubmissionVersion, 'version_number'> & {
   submitted_at?: string | null;
@@ -76,16 +77,11 @@ function formatTimestamp(version: SubmissionHistoryItem): string {
   return raw ? new Date(raw).toLocaleString() : '—';
 }
 
-function formatStatusLabel(status: string): string {
-  if (!status) return status;
-  return status.charAt(0).toUpperCase() + status.slice(1);
-}
-
 function feedbackStatusCell(version: SubmissionHistoryItem): React.ReactNode {
   if (version.feedback_available && version.feedback_status) {
     return (
       <Badge variant={FEEDBACK_BADGE[version.feedback_status] ?? 'secondary'}>
-        {formatStatusLabel(version.feedback_status)}
+        {formatFeedbackStatusLabel(version.feedback_status)}
       </Badge>
     );
   }
@@ -98,7 +94,7 @@ function feedbackStatusCell(version: SubmissionHistoryItem): React.ReactNode {
   }
   return (
     <Badge variant={FEEDBACK_BADGE.pending}>
-      Pending
+      {formatFeedbackStatusLabel('pending')}
     </Badge>
   );
 }
