@@ -19,6 +19,7 @@ import { PdfPoller } from './PdfPoller';
 import { StudentFeedbackPanel } from './StudentFeedbackPanel';
 import { StudentSubmissionDetail } from './StudentSubmissionDetail';
 import { SubmissionHistory } from './SubmissionHistory';
+import { RequiredFieldsModal } from './RequiredFieldsModal';
 import { useTasStore } from '../store/tasStore';
 import { submissionsApi, formatApiError } from '../services/api';
 import { navigateBackToAssignment } from '../utils/navigateBackToAssignment';
@@ -49,6 +50,8 @@ export const TasApp: React.FC = () => {
   const [versionsLoading, setVersionsLoading] = useState(false);
   const [selectedHistoryVersion, setSelectedHistoryVersion] = useState<SubmissionVersion | null>(null);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+  const [requiredFieldsModalOpen, setRequiredFieldsModalOpen] = useState(false);
+  const [missingRequiredFields, setMissingRequiredFields] = useState<string[]>([]);
 
   // ── Responsive detection ───────────────────────────────────────────────────
   useEffect(() => {
@@ -240,7 +243,8 @@ export const TasApp: React.FC = () => {
         .map((f) => f.label) ?? [];
 
     if (missing.length > 0) {
-      alert(`Please fill in required fields:\n• ${missing.join('\n• ')}`);
+      setMissingRequiredFields(missing);
+      setRequiredFieldsModalOpen(true);
       return;
     }
 
@@ -298,6 +302,26 @@ export const TasApp: React.FC = () => {
     clearFormData();
     setClearConfirmOpen(false);
   }, [clearFormData]);
+
+  const handleRequiredFieldsComplete = useCallback(() => {
+    setRequiredFieldsModalOpen(false);
+  }, []);
+
+  const handleSaveDraftAndGoBack = useCallback(async () => {
+    if (!submission || submission.status !== 'draft') return;
+    try {
+      setIsSaving(true);
+      const updated = await submissionsApi.patch(submission.id, formData);
+      setSubmission(updated);
+      setRequiredFieldsModalOpen(false);
+      navigateBackToAssignment(mfeContext);
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail || 'Failed to save draft.';
+      alert(msg);
+    } finally {
+      setIsSaving(false);
+    }
+  }, [submission, formData, setIsSaving, setSubmission, mfeContext]);
 
   const isLocked = submission != null && submission.status !== 'draft';
   const isRejected = submission?.status === 'rejected';
@@ -610,6 +634,15 @@ export const TasApp: React.FC = () => {
           </ActionRow>
         </ModalDialog.Footer>
       </ModalDialog>
+
+      <RequiredFieldsModal
+        isOpen={requiredFieldsModalOpen}
+        missingFields={missingRequiredFields}
+        isSaving={isSaving}
+        onClose={handleRequiredFieldsComplete}
+        onComplete={handleRequiredFieldsComplete}
+        onSaveDraftAndGoBack={handleSaveDraftAndGoBack}
+      />
     </div>
   );
 };
