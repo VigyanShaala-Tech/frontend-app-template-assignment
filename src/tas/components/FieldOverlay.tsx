@@ -75,15 +75,18 @@ export const FieldOverlay: React.FC<FieldOverlayProps> = ({
     if (!isInactive) openFieldEditor(field.id);
   };
 
+  const isEmptyPlaceholder = !isInactive && !isSelected && !hasValue;
+
   const borderColor = isInactive
     ? 'transparent'
     : isSelected
     ? '#3b82f6'
     : hasValue
     ? '#22c55e'
-    : '#9ca3af';
+    : '#d1d5db';
 
-  const borderStyle = !isInactive && !isSelected && !hasValue ? 'dashed' : 'solid';
+  const borderWidth = isEmptyPlaceholder ? 1 : 2;
+  const borderStyle = isEmptyPlaceholder ? 'dashed' : 'solid';
 
   const bgColor = isInactive
     ? 'transparent'
@@ -102,15 +105,15 @@ export const FieldOverlay: React.FC<FieldOverlayProps> = ({
         top: `${position.y}%`,
         width: `${position.width}%`,
         height: `${position.height}%`,
-        border: `2px ${borderStyle} ${borderColor}`,
+        border: `${borderWidth}px ${borderStyle} ${borderColor}`,
         backgroundColor: bgColor,
         cursor: isInactive ? 'default' : 'pointer',
         boxSizing: 'border-box',
         transition: 'border-color 0.15s ease, background-color 0.15s ease',
       }}
     >
-      {/* Label badge above the field (hidden on mobile; shown in FieldEditorPopup instead) */}
-      {!isInactive && !isMobile && (
+      {/* Field header intentionally hidden on the assignment template; popup shows the label while editing. */}
+      {!isInactive && (
         <div
           style={{
             position: 'absolute',
@@ -124,6 +127,8 @@ export const FieldOverlay: React.FC<FieldOverlayProps> = ({
             fontSize: isMobile ? 7 : 11,
             padding: isMobile ? '1px 3px' : '2px 6px',
             lineHeight: 1.2,
+            visibility: 'hidden',
+            pointerEvents: 'none',
           }}
         >
           {field.label}
@@ -149,23 +154,6 @@ export const FieldOverlay: React.FC<FieldOverlayProps> = ({
           }}
         >
           {fieldValue}
-        </div>
-      )}
-
-      {/* Tap hint (hidden on mobile; dashed border indicates empty fields) */}
-      {!hasValue && !isInactive && !isMobile && (
-        <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#9ca3af',
-            fontSize: isMobile ? 8 : 11,
-          }}
-        >
-          Tap to fill
         </div>
       )}
     </div>
