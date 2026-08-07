@@ -6,7 +6,7 @@
  *   2. Student sees TemplateSelector (templates assigned to this block)
  *   3. Student picks a template → createOrGetDraft is called
  *   4. TemplateCanvas renders with field overlays; FieldEditorPopup opens on tap
- *   5. Student hits "Save Draft" to persist progress, or "Submit" to finalise
+ *   5. Student hits "Submit" to finalise (draft also persists via Save & Go Back)
  */
 
 import React, { useEffect, useCallback, useRef, useState } from 'react';
@@ -22,9 +22,12 @@ import { SubmissionHistory } from './SubmissionHistory';
 import { RequiredFieldsModal } from './RequiredFieldsModal';
 import { BackNavigationModal } from './BackNavigationModal';
 import { useTasStore } from '../store/tasStore';
+import { useBackNavigationGuard } from '../hooks/useBackNavigationGuard';
 import { submissionsApi, formatApiError } from '../services/api';
 import { navigateBackToAssignment } from '../utils/navigateBackToAssignment';
 import type { SubmissionVersion } from '../types';
+
+const SUBMIT_GREEN = '#69AB4A';
 
 export const TasApp: React.FC = () => {
   const {
@@ -309,6 +312,26 @@ export const TasApp: React.FC = () => {
     setRequiredFieldsModalOpen(false);
   }, []);
 
+  const handleBackContinueHere = useCallback(() => {
+    setBackConfirmOpen(false);
+  }, []);
+
+  const openBackConfirm = useCallback(() => {
+    useTasStore.getState().closeFieldEditor();
+    setBackConfirmOpen(true);
+  }, []);
+
+  const isLocked = submission != null && submission.status !== 'draft';
+  const isRejected = submission?.status === 'rejected';
+  const backGuardEnabled = Boolean(
+    selectedTemplate && submission && submission.status === 'draft',
+  );
+
+  const { allowLeave, extraHistoryEntries } = useBackNavigationGuard({
+    enabled: backGuardEnabled,
+    onBack: openBackConfirm,
+  });
+
   const handleSaveDraftAndGoBack = useCallback(async () => {
     if (!submission || submission.status !== 'draft') return;
     try {
@@ -317,21 +340,23 @@ export const TasApp: React.FC = () => {
       setSubmission(updated);
       setRequiredFieldsModalOpen(false);
       setBackConfirmOpen(false);
-      navigateBackToAssignment(mfeContext);
+      allowLeave();
+      navigateBackToAssignment(mfeContext, { extraHistoryEntries });
     } catch (err: any) {
       const msg = err?.response?.data?.detail || 'Failed to save draft.';
       alert(msg);
     } finally {
       setIsSaving(false);
     }
-  }, [submission, formData, setIsSaving, setSubmission, mfeContext]);
-
-  const handleBackContinueHere = useCallback(() => {
-    setBackConfirmOpen(false);
-  }, []);
-
-  const isLocked = submission != null && submission.status !== 'draft';
-  const isRejected = submission?.status === 'rejected';
+  }, [
+    submission,
+    formData,
+    setIsSaving,
+    setSubmission,
+    mfeContext,
+    allowLeave,
+    extraHistoryEntries,
+  ]);
 
   // ─── Render: no template selected → selector ──────────────────────────────
   if (!selectedTemplate) {
@@ -401,7 +426,7 @@ export const TasApp: React.FC = () => {
           {!isLocked && (
             <button
               type="button"
-              onClick={() => setBackConfirmOpen(true)}
+              onClick={openBackConfirm}
               style={{ ...btnBase, background: '#f3f4f6', color: '#374151' }}
             >
               ← Back
@@ -486,24 +511,6 @@ export const TasApp: React.FC = () => {
             ↓ Save as PDF
           </button>
 
-          {/* Save Draft */}
-          {!isLocked && (
-            <button
-              type="button"
-              onClick={handleSaveDraft}
-              disabled={isSaving || !submission}
-              style={{
-                ...btnBase,
-                background: '#fff',
-                color: '#2563eb',
-                border: '1.5px solid #2563eb',
-                opacity: (isSaving || !submission) ? 0.5 : 1,
-              }}
-            >
-              {isSaving ? 'Saving…' : 'Save Draft'}
-            </button>
-          )}
-
           {/* Submit */}
           {!isLocked && (
             <button
@@ -512,7 +519,7 @@ export const TasApp: React.FC = () => {
               disabled={isSaving || !submission}
               style={{
                 ...btnBase,
-                background: '#2563eb',
+                background: SUBMIT_GREEN,
                 color: '#fff',
                 opacity: (isSaving || !submission) ? 0.5 : 1,
               }}

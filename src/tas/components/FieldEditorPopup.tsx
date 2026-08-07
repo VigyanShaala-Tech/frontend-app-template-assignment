@@ -40,14 +40,12 @@ const handleInputFocus = (e: React.FocusEvent<HTMLElement>) => {
 interface MobileFloatingPopupProps {
   viewportRect: VisualViewportRect;
   fieldId: string;
-  onClose: () => void;
   children: React.ReactNode;
 }
 
 const MobileFloatingPopup: React.FC<MobileFloatingPopupProps> = ({
   viewportRect,
   fieldId,
-  onClose,
   children,
 }) => {
   const dragControls = useDragControls();
@@ -106,7 +104,6 @@ const MobileFloatingPopup: React.FC<MobileFloatingPopupProps> = ({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        onClick={onClose}
       />
       <motion.div
         ref={modalRef}
@@ -183,11 +180,6 @@ export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
   const hasPrev = currentIndex > 0;
   const hasNext = currentIndex >= 0 && currentIndex < fields.length - 1;
 
-  const saveAndNavigate = (targetField: FormField) => {
-    if (field) setFormValue(field.id, localValue);
-    openFieldEditor(targetField.id);
-  };
-
   const [localValue, setLocalValue] = React.useState('');
 
   useEffect(() => {
@@ -196,14 +188,23 @@ export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
 
   if (!field || !isFieldEditorOpen) return null;
 
-  const handleSave = () => {
+  const saveAndNavigate = (targetField: FormField) => {
     setFormValue(field.id, localValue);
-    closeFieldEditor();
+    openFieldEditor(targetField.id);
+  };
+
+  const handleSaveAndNext = () => {
+    setFormValue(field.id, localValue);
+    if (hasNext) {
+      openFieldEditor(fields[currentIndex + 1].id);
+    } else {
+      closeFieldEditor();
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && field.type !== 'textarea') {
-      handleSave();
+      handleSaveAndNext();
     }
   };
 
@@ -303,13 +304,40 @@ export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
   const content = (
     <div
       style={{
+        position: 'relative',
         padding: isMobile ? '10px 12px 12px' : '20px 24px 24px',
         display: 'flex',
         flexDirection: 'column',
         gap: isMobile ? 8 : 16,
       }}
     >
-      <div>
+      <button
+        type="button"
+        aria-label="Close"
+        onClick={closeFieldEditor}
+        style={{
+          position: 'absolute',
+          top: isMobile ? 6 : 12,
+          right: isMobile ? 8 : 12,
+          width: isMobile ? 28 : 32,
+          height: isMobile ? 28 : 32,
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          border: 'none',
+          background: 'transparent',
+          color: '#6b7280',
+          fontSize: isMobile ? 20 : 22,
+          lineHeight: 1,
+          cursor: 'pointer',
+          borderRadius: 8,
+          padding: 0,
+        }}
+      >
+        ×
+      </button>
+
+      <div style={{ paddingRight: isMobile ? 28 : 32 }}>
         <h3
           style={{
             fontSize: isMobile ? 14 : 17,
@@ -337,72 +365,34 @@ export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
 
       {renderInput()}
 
-      {/* Prev / Next navigation */}
-      {fields.length > 1 && (
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            type="button"
-            disabled={!hasPrev}
-            onClick={() => saveAndNavigate(fields[currentIndex - 1])}
-            style={{
-              flex: 1,
-              padding: isMobile ? '6px 0' : '8px 0',
-              borderRadius: 10,
-              border: '1.5px solid #d1d5db',
-              background: '#fff',
-              color: hasPrev ? '#374151' : '#d1d5db',
-              fontWeight: 600,
-              fontSize: 13,
-              cursor: hasPrev ? 'pointer' : 'default',
-            }}
-          >
-            ← Prev
-          </button>
-          <span style={{ alignSelf: 'center', fontSize: 12, color: '#9ca3af', whiteSpace: 'nowrap' }}>
-            {currentIndex + 1} / {fields.length}
-          </span>
-          <button
-            type="button"
-            disabled={!hasNext}
-            onClick={() => saveAndNavigate(fields[currentIndex + 1])}
-            style={{
-              flex: 1,
-              padding: isMobile ? '6px 0' : '8px 0',
-              borderRadius: 10,
-              border: '1.5px solid #d1d5db',
-              background: '#fff',
-              color: hasNext ? '#374151' : '#d1d5db',
-              fontWeight: 600,
-              fontSize: 13,
-              cursor: hasNext ? 'pointer' : 'default',
-            }}
-          >
-            Next →
-          </button>
-        </div>
-      )}
-
-      <div style={{ display: 'flex', gap: isMobile ? 6 : 10 }}>
+      {/* Prev / Save & Next */}
+      <div style={{ display: 'flex', gap: 8 }}>
         <button
           type="button"
-          onClick={closeFieldEditor}
+          disabled={!hasPrev}
+          onClick={() => saveAndNavigate(fields[currentIndex - 1])}
           style={{
             flex: 1,
             padding: isMobile ? '6px 0' : '10px 0',
             borderRadius: 10,
             border: '1.5px solid #d1d5db',
             background: '#fff',
-            color: '#374151',
+            color: hasPrev ? '#374151' : '#d1d5db',
             fontWeight: 600,
             fontSize: isMobile ? 12 : 14,
-            cursor: 'pointer',
+            cursor: hasPrev ? 'pointer' : 'default',
           }}
         >
-          Cancel
+          ← Prev
         </button>
+        {fields.length > 1 && (
+          <span style={{ alignSelf: 'center', fontSize: 12, color: '#9ca3af', whiteSpace: 'nowrap' }}>
+            {currentIndex + 1} / {fields.length}
+          </span>
+        )}
         <button
           type="button"
-          onClick={handleSave}
+          onClick={handleSaveAndNext}
           style={{
             flex: 1,
             padding: isMobile ? '6px 0' : '10px 0',
@@ -416,7 +406,7 @@ export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
             boxShadow: '0 1px 3px rgba(37,99,235,0.3)',
           }}
         >
-          Save
+          Save & Next
         </button>
       </div>
     </div>
@@ -430,7 +420,6 @@ export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
             key={field.id}
             fieldId={field.id}
             viewportRect={viewportRect}
-            onClose={closeFieldEditor}
           >
             {content}
           </MobileFloatingPopup>
@@ -439,7 +428,7 @@ export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
     );
   }
 
-  // Desktop: centered modal (unchanged)
+  // Desktop: centered modal
   return (
     <AnimatePresence>
       {isFieldEditorOpen && (
@@ -449,7 +438,6 @@ export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={closeFieldEditor}
           />
           <motion.div
             style={{
