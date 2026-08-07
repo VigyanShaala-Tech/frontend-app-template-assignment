@@ -21,10 +21,24 @@ function hasJumpToContext(mfeContext: MfeContext | null): mfeContext is MfeConte
   return Boolean(mfeContext?.courseId?.trim() && mfeContext?.usageKey?.trim());
 }
 
+export interface NavigateBackOptions {
+  /**
+   * Extra history entries to skip (e.g. a back-navigation guard sentinel).
+   * When using history navigation, goes `-(1 + extraHistoryEntries)` steps.
+   * Ignored when falling back to jump_to (full page navigation).
+   */
+  extraHistoryEntries?: number;
+}
+
 /** Navigate back to the LMS assignment block (history first, jump_to fallback). */
-export function navigateBackToAssignment(mfeContext: MfeContext | null): void {
+export function navigateBackToAssignment(
+  mfeContext: MfeContext | null,
+  options?: NavigateBackOptions,
+): void {
+  const steps = 1 + (options?.extraHistoryEntries ?? 0);
+
   if (canUseBrowserHistoryBack()) {
-    window.history.back();
+    window.history.go(-steps);
     return;
   }
 
@@ -37,7 +51,7 @@ export function navigateBackToAssignment(mfeContext: MfeContext | null): void {
 
   // Graceful last resort — avoid constructing an invalid jump_to URL
   if (window.history.length > 1) {
-    window.history.back();
+    window.history.go(-steps);
   }
   // Otherwise remain on the submission page (no navigation, no invalid URL)
 }
