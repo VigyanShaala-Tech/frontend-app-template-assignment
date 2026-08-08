@@ -21,10 +21,12 @@ import { StudentSubmissionDetail } from './StudentSubmissionDetail';
 import { SubmissionHistory } from './SubmissionHistory';
 import { RequiredFieldsModal } from './RequiredFieldsModal';
 import { BackNavigationModal } from './BackNavigationModal';
+import { OptionalFieldsSubmitModal } from './OptionalFieldsSubmitModal';
 import { useTasStore } from '../store/tasStore';
 import { useBackNavigationGuard } from '../hooks/useBackNavigationGuard';
 import { submissionsApi, formatApiError } from '../services/api';
 import { navigateBackToAssignment } from '../utils/navigateBackToAssignment';
+import { getActiveFields, isFieldEmpty } from '../utils/activeFields';
 import type { SubmissionVersion } from '../types';
 
 const SUBMIT_GREEN = '#69AB4A';
@@ -43,6 +45,7 @@ export const TasApp: React.FC = () => {
     isPreviewMode,
     setPreviewMode,
     setIsMobile,
+    isMobile,
     getSelectedField,
     isSaving,
     setIsSaving,
@@ -57,6 +60,7 @@ export const TasApp: React.FC = () => {
   const [requiredFieldsModalOpen, setRequiredFieldsModalOpen] = useState(false);
   const [missingRequiredFields, setMissingRequiredFields] = useState<string[]>([]);
   const [backConfirmOpen, setBackConfirmOpen] = useState(false);
+  const [optionalFieldsModalOpen, setOptionalFieldsModalOpen] = useState(false);
 
   // ── Responsive detection ───────────────────────────────────────────────────
   useEffect(() => {
@@ -216,12 +220,76 @@ export const TasApp: React.FC = () => {
       </div>
     </body></html>`;
 
-    const win = window.open('', '_blank');
-    if (!win) return;
-    win.document.write(html);
-    win.document.close();
-    win.onload = () => { win.focus(); win.print(); };
-  }, [selectedTemplate, formData]);
+    const triggerPrint = (doc: Document, win: Window) => {
+      let printed = false;
+      const runPrint = () => {
+        if (printed) return;
+        printed = true;
+        try {
+          win.focus();
+          win.print();
+        } catch {
+          // Ignore print errors (some mobile browsers block print silently).
+        }
+      };
+
+      const img = doc.querySelector('img');
+      if (img && !img.complete) {
+        const onReady = () => {
+          img.removeEventListener('load', onReady);
+          img.removeEventListener('error', onReady);
+          // Allow layout to settle before opening the print sheet.
+          window.setTimeout(runPrint, 50);
+        };
+        img.addEventListener('load', onReady);
+        img.addEventListener('error', onReady);
+        // Fallback if load events never fire.
+        window.setTimeout(onReady, 1500);
+      } else {
+        window.setTimeout(runPrint, 50);
+      }
+    };
+
+    const useIframeFallback = isMobile;
+    let win: Window | null = null;
+    if (!useIframeFallback) {
+      win = window.open('', '_blank');
+    }
+
+    if (win) {
+      win.document.write(html);
+      win.document.close();
+      triggerPrint(win.document, win);
+      return;
+    }
+
+    // Mobile / popup-blocked: same-tab hidden iframe (reuse same HTML generation).
+    const existing = document.getElementById('tas-print-iframe');
+    if (existing) existing.remove();
+
+    const iframe = document.createElement('iframe');
+    iframe.id = 'tas-print-iframe';
+    iframe.setAttribute('aria-hidden', 'true');
+    iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;';
+    document.body.appendChild(iframe);
+
+    const iframeWin = iframe.contentWindow;
+    const iframeDoc = iframe.contentDocument || iframeWin?.document;
+    if (!iframeWin || !iframeDoc) {
+      iframe.remove();
+      return;
+    }
+
+    iframeDoc.open();
+    iframeDoc.write(html);
+    iframeDoc.close();
+    triggerPrint(iframeDoc, iframeWin);
+
+    // Clean up after print dialog interaction window.
+    window.setTimeout(() => {
+      iframe.remove();
+    }, 60_000);
+  }, [selectedTemplate, formData, isMobile]);
 
   // ── Save draft handler ─────────────────────────────────────────────────────
   const handleSaveDraft = useCallback(async () => {
@@ -239,21 +307,8 @@ export const TasApp: React.FC = () => {
   }, [submission, formData, setIsSaving, setSubmission]);
 
   // ── Submit handler ─────────────────────────────────────────────────────────
-  const handleSubmit = useCallback(async () => {
+  const submitAssignment = useCallback(async () => {
     if (!submission || submission.status !== 'draft') return;
-
-    const missing =
-      selectedTemplate?.fields
-        .filter((f) => f.required && !(formData[f.id] ?? '').trim())
-        .map((f) => f.label) ?? [];
-
-    if (missing.length > 0) {
-      setMissingRequiredFields(missing);
-      setRequiredFieldsModalOpen(true);
-      return;
-    }
-
-    if (!window.confirm('Submit this assignment? You cannot edit it after submitting.')) return;
 
     try {
       setIsSaving(true);
@@ -284,7 +339,43 @@ export const TasApp: React.FC = () => {
     } finally {
       setIsSaving(false);
     }
-  }, [submission, selectedTemplate, formData, setIsSaving, setSubmission]);
+  }, [submission, formData, setIsSaving, setSubmission]);
+
+  const handleSubmit = useCallback(() => {
+    if (!submission || submission.status !== 'draft') return;
+
+    const activeFields = getActiveFields(selectedTemplate);
+
+    const missing = activeFields
+      .filter((f) => f.required && isFieldEmpty(formData, f.id))
+      .map((f) => f.label);
+
+    if (missing.length > 0) {
+      setMissingRequiredFields(missing);
+      setRequiredFieldsModalOpen(true);
+      return;
+    }
+
+    const hasEmptyOptional = activeFields.some(
+      (f) => !f.required && isFieldEmpty(formData, f.id),
+    );
+    if (hasEmptyOptional) {
+      setOptionalFieldsModalOpen(true);
+      return;
+    }
+
+    if (!window.confirm('Submit this assignment? You cannot edit it after submitting.')) return;
+    void submitAssignment();
+  }, [submission, selectedTemplate, formData, submitAssignment]);
+
+  const handleOptionalContinueHere = useCallback(() => {
+    setOptionalFieldsModalOpen(false);
+  }, []);
+
+  const handleOptionalConfirmSubmit = useCallback(() => {
+    setOptionalFieldsModalOpen(false);
+    void submitAssignment();
+  }, [submitAssignment]);
 
   // ── Edit Assignment (rejected → draft reopen) ──────────────────────────────
   const handleEditAssignment = useCallback(async () => {
@@ -340,6 +431,7 @@ export const TasApp: React.FC = () => {
       setSubmission(updated);
       setRequiredFieldsModalOpen(false);
       setBackConfirmOpen(false);
+      setOptionalFieldsModalOpen(false);
       allowLeave();
       navigateBackToAssignment(mfeContext, { extraHistoryEntries });
     } catch (err: any) {
@@ -660,6 +752,14 @@ export const TasApp: React.FC = () => {
         onClose={handleBackContinueHere}
         onContinueHere={handleBackContinueHere}
         onSaveAndGoBack={handleSaveDraftAndGoBack}
+      />
+
+      <OptionalFieldsSubmitModal
+        isOpen={optionalFieldsModalOpen}
+        isSaving={isSaving}
+        onClose={handleOptionalContinueHere}
+        onContinueHere={handleOptionalContinueHere}
+        onConfirmSubmit={handleOptionalConfirmSubmit}
       />
     </div>
   );
