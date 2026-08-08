@@ -4,9 +4,9 @@
  * Uses inline styles for positioning (no Tailwind/Paragon needed for absolute placement).
  */
 
-import React, { useRef, useLayoutEffect, useState } from 'react';
+import React from 'react';
 import { useTasStore } from '../store/tasStore';
-import { percentToPixels } from '../utils/positioning';
+import { resolveFieldLayout, fieldTextStyle } from '../utils/fieldLayout';
 import type { FormField, FieldPosition } from '../types';
 
 interface FieldOverlayProps {
@@ -22,30 +22,8 @@ interface FieldOverlayProps {
   isReadOnly?: boolean;
 }
 
-/** Shrinks font size by up to two steps if content overflows the container. */
-function useAutoFontSize(
-  containerRef: React.RefObject<HTMLDivElement>,
-  baseFontSize: number,
-  value: string,
-): number {
-  const [fontSize, setFontSize] = useState(baseFontSize);
-
-  useLayoutEffect(() => {
-    setFontSize(baseFontSize);
-  }, [baseFontSize, value]);
-
-  useLayoutEffect(() => {
-    const el = containerRef.current;
-    if (!el || !value) return;
-
-    if (el.scrollHeight > el.clientHeight || el.scrollWidth > el.clientWidth) {
-      const smaller = baseFontSize - 2;
-      if (smaller >= 8) setFontSize(smaller);
-    }
-  });
-
-  return fontSize;
-}
+const CAPACITY_WARNING =
+  'This field has reached its maximum capacity.';
 
 export const FieldOverlay: React.FC<FieldOverlayProps> = ({
   field,
@@ -55,20 +33,14 @@ export const FieldOverlay: React.FC<FieldOverlayProps> = ({
   actualImageHeight,
   isReadOnly = false,
 }) => {
-  const { openFieldEditor, formData, isMobile, submission } = useTasStore();
-  const valueRef = useRef<HTMLDivElement>(null);
+  const { openFieldEditor, formData, isMobile, submission, fieldCapacityFull } = useTasStore();
 
-  const actualPx = percentToPixels(position, actualImageWidth, actualImageHeight);
-  const baseFontSize = field.fontSize ?? Math.max(10, Math.min(20, actualPx.height * 0.6));
-
-  const maxChars = field.maxChars ?? 60;
-  const rawValue = formData[field.id] ?? '';
-  const fieldValue = rawValue.slice(0, maxChars);
+  const layout = resolveFieldLayout(field, position, actualImageWidth, actualImageHeight);
+  const fieldValue = formData[field.id] ?? '';
   const hasValue = fieldValue.trim().length > 0;
   const isSubmitted = submission?.status === 'submitted';
   const isInactive = isReadOnly || isSubmitted;
-
-  const displayFontSize = useAutoFontSize(valueRef, baseFontSize, fieldValue);
+  const isCapacityFull = Boolean(fieldCapacityFull[field.id]);
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -95,6 +67,8 @@ export const FieldOverlay: React.FC<FieldOverlayProps> = ({
     : hasValue
     ? 'rgba(34,197,94,0.08)'
     : 'rgba(255,255,255,0.15)';
+
+  const textStyles = fieldTextStyle(layout);
 
   return (
     <div
@@ -136,21 +110,46 @@ export const FieldOverlay: React.FC<FieldOverlayProps> = ({
         </div>
       )}
 
+      {/* Capacity warning — outside the content box so it does not cover assignment text */}
+      {!isInactive && isCapacityFull && (
+        <span
+          role="img"
+          aria-label={CAPACITY_WARNING}
+          title={CAPACITY_WARNING}
+          style={{
+            position: 'absolute',
+            top: -12,
+            right: -12,
+            width: isMobile ? 22 : 16,
+            height: isMobile ? 22 : 16,
+            borderRadius: '50%',
+            background: '#fef3c7',
+            border: '1px solid #f59e0b',
+            color: '#b45309',
+            fontSize: isMobile ? 11 : 10,
+            fontWeight: 700,
+            lineHeight: 1,
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 2,
+            pointerEvents: 'auto',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.12)',
+          }}
+        >
+          !
+        </span>
+      )}
+
       {/* Value preview */}
       {hasValue && (
         <div
-          ref={valueRef}
           style={{
             position: 'absolute',
             inset: 0,
             overflow: 'hidden',
-            fontWeight: 500,
-            color: '#111827',
-            lineHeight: 1.3,
-            fontSize: displayFontSize,
-            padding: 2,
-            wordBreak: 'break-word',
-            whiteSpace: 'pre-wrap',
+            ...textStyles,
+            // padding already in textStyles; inset:0 + box padding matches PDF inset
           }}
         >
           {fieldValue}

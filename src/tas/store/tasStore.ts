@@ -31,6 +31,12 @@ interface TasState {
   setFormData: (data: Record<string, string>) => void;
   clearFormData: () => void;
 
+  // ── Per-field capacity warning (geometry-based, not maxChars) ───────────────
+  fieldCapacityFull: Record<string, boolean>;
+  setFieldCapacityFull: (fieldId: string, full: boolean) => void;
+  setFieldCapacityFullMap: (map: Record<string, boolean>) => void;
+  clearFieldCapacityFull: () => void;
+
   // ── Canvas state ───────────────────────────────────────────────────────────
   canvasState: CanvasState;
   setCanvasState: (state: Partial<CanvasState>) => void;
@@ -77,6 +83,7 @@ export const useTasStore = create<TasState>((set, get) => ({
       selectedTemplate: template,
       selectedTemplateBlockId: templateBlockId,
       formData: {},
+      fieldCapacityFull: {},
       submission: null,
       canvasState: DEFAULT_CANVAS,
       selectedFieldId: null,
@@ -93,7 +100,23 @@ export const useTasStore = create<TasState>((set, get) => ({
   setFormValue: (fieldId, value) =>
     set((state) => ({ formData: { ...state.formData, [fieldId]: value } })),
   setFormData: (data) => set({ formData: data }),
-  clearFormData: () => set({ formData: {} }),
+  clearFormData: () => set({ formData: {}, fieldCapacityFull: {} }),
+
+  // Capacity warnings
+  fieldCapacityFull: {},
+  setFieldCapacityFull: (fieldId, full) =>
+    set((state) => {
+      if (!full) {
+        if (!state.fieldCapacityFull[fieldId]) return state;
+        const next = { ...state.fieldCapacityFull };
+        delete next[fieldId];
+        return { fieldCapacityFull: next };
+      }
+      if (state.fieldCapacityFull[fieldId]) return state;
+      return { fieldCapacityFull: { ...state.fieldCapacityFull, [fieldId]: true } };
+    }),
+  setFieldCapacityFullMap: (map) => set({ fieldCapacityFull: map }),
+  clearFieldCapacityFull: () => set({ fieldCapacityFull: {} }),
 
   // Canvas
   canvasState: DEFAULT_CANVAS,
@@ -136,6 +159,7 @@ export const useTasStore = create<TasState>((set, get) => ({
       selectedTemplateBlockId: null,
       submission: null,
       formData: {},
+      fieldCapacityFull: {},
       selectedFieldId: null,
       isFieldEditorOpen: false,
       isPreviewMode: false,

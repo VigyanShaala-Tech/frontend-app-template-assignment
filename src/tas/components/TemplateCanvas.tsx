@@ -4,10 +4,11 @@
  * Zoom/pan via react-zoom-pan-pinch, contained inside the white card from TasApp.
  */
 
-import React, { useRef } from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import { useTasStore } from '../store/tasStore';
 import { FieldOverlay } from './FieldOverlay';
+import { fitScaleToWidth } from '../utils/fitScaleToWidth';
 import type { Template } from '../types';
 
 interface Props {
@@ -17,17 +18,56 @@ interface Props {
 
 export const TemplateCanvas: React.FC<Props> = ({ template, readOnly = false }) => {
   const canvasRef = useRef<HTMLDivElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const { canvasState, setCanvasState, selectedFieldId, setSelectedFieldId, isMobile } = useTasStore();
 
   const imageNaturalW = template.image_width || 794;
   const imageNaturalH = template.image_height || 1123;
 
+  // Mobile: fit natural-size content into viewport; desktop uses canvasState.scale.
+  const [mobileFitScale, setMobileFitScale] = useState<number | null>(null);
+
+  useLayoutEffect(() => {
+    if (!isMobile) {
+      setMobileFitScale(null);
+      return undefined;
+    }
+
+    const el = wrapperRef.current;
+    if (!el) return undefined;
+
+    const update = () => {
+      setMobileFitScale(fitScaleToWidth(el.clientWidth, imageNaturalW, 16));
+    };
+
+    update();
+
+    const observer = typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(update)
+      : null;
+    observer?.observe(el);
+
+    return () => {
+      observer?.disconnect();
+    };
+  }, [isMobile, imageNaturalW]);
+
   const handleCanvasClick = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget) setSelectedFieldId(null);
   };
 
+  const initialScale = isMobile
+    ? (mobileFitScale ?? canvasState.scale)
+    : canvasState.scale;
+
+  // Remount TransformWrapper once mobile fit scale is known so initialScale applies.
+  const transformKey = isMobile
+    ? `mobile-${mobileFitScale ?? 'pending'}-${imageNaturalW}`
+    : `desktop-${imageNaturalW}`;
+
   return (
     <div
+      ref={wrapperRef}
       className="tas-template-canvas"
       style={{
         position: 'relative',
@@ -38,9 +78,10 @@ export const TemplateCanvas: React.FC<Props> = ({ template, readOnly = false }) 
       }}
     >
       <TransformWrapper
-        initialScale={canvasState.scale}
-        initialPositionX={canvasState.positionX}
-        initialPositionY={canvasState.positionY}
+        key={transformKey}
+        initialScale={initialScale}
+        initialPositionX={isMobile ? 0 : canvasState.positionX}
+        initialPositionY={isMobile ? 0 : canvasState.positionY}
         minScale={0.2}
         maxScale={5}
         limitToBounds={false}

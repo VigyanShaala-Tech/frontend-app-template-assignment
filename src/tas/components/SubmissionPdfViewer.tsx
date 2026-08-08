@@ -52,7 +52,7 @@ export const SubmissionPdfViewer: React.FC<Props> = ({
   }
 
   return (
-    <Card className="shadow-sm mb-4">
+    <Card className="shadow-sm mb-4 tas-submission-pdf-viewer">
       <Card.Header title={title} />
       <Card.Section style={{ padding: 0 }}>
         <iframe
@@ -62,7 +62,10 @@ export const SubmissionPdfViewer: React.FC<Props> = ({
             width: '100%', height, border: 'none', display: 'block',
           }}
         />
-        <div className="px-3 py-2 border-top d-flex" style={{ background: '#f8f9fa', gap: 8 }}>
+        <div
+          className="px-3 py-2 border-top d-flex tas-submission-pdf-viewer__actions"
+          style={{ background: '#f8f9fa', gap: 8 }}
+        >
           {showViewPdf && (
             <button
               type="button"

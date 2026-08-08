@@ -27,6 +27,12 @@ import {
   getDragConstraints,
   type Point,
 } from '../utils/mobilePopupConstraints';
+import {
+  FIELD_TEXT_FONT_FAMILY,
+  FIELD_TEXT_LINE_HEIGHT,
+  resolveFieldLayout,
+} from '../utils/fieldLayout';
+import { applyTextCandidate } from '../utils/clampTextToField';
 
 interface Props {
   field: FormField | null;
@@ -172,6 +178,9 @@ export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
     formData,
     setFormValue,
     isMobile,
+    selectedTemplate,
+    setFieldCapacityFull,
+    fieldCapacityFull,
   } = useTasStore();
 
   const viewportRect = useVisualViewportRect(isFieldEditorOpen && isMobile);
@@ -181,10 +190,40 @@ export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
   const hasNext = currentIndex >= 0 && currentIndex < fields.length - 1;
 
   const [localValue, setLocalValue] = React.useState('');
+  const composingRef = useRef(false);
+  const acceptedValueRef = useRef('');
 
   useEffect(() => {
-    if (field) setLocalValue(formData[field.id] ?? '');
+    if (field) {
+      const initial = formData[field.id] ?? '';
+      setLocalValue(initial);
+      acceptedValueRef.current = initial;
+    }
   }, [field, formData]);
+
+  const fieldLayout = useMemo(() => {
+    if (!field || !selectedTemplate) return null;
+    const position = selectedTemplate.field_positions[field.id];
+    if (!position) return null;
+    const imageW = selectedTemplate.image_width || 794;
+    const imageH = selectedTemplate.image_height || 1123;
+    return resolveFieldLayout(field, position, imageW, imageH);
+  }, [field, selectedTemplate]);
+
+  const applyCapacityGatedValue = (candidate: string) => {
+    if (!field) return;
+    if (!fieldLayout) {
+      setLocalValue(candidate);
+      acceptedValueRef.current = candidate;
+      setFieldCapacityFull(field.id, false);
+      return;
+    }
+    const previous = acceptedValueRef.current;
+    const result = applyTextCandidate(previous, candidate, fieldLayout);
+    setLocalValue(result.value);
+    acceptedValueRef.current = result.value;
+    setFieldCapacityFull(field.id, result.capacityFull);
+  };
 
   if (!field || !isFieldEditorOpen) return null;
 
@@ -208,7 +247,7 @@ export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
     }
   };
 
-  const inputStyle: React.CSSProperties = {
+  const compactInputStyle: React.CSSProperties = {
     width: '100%',
     borderRadius: 10,
     border: '1.5px solid #d1d5db',
@@ -222,18 +261,42 @@ export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
     transition: 'border-color 0.15s',
   };
 
-  const maxChars = field.maxChars ?? 60;
-
-  const handleChange = (value: string) => {
-    setLocalValue(value.slice(0, maxChars));
+  // Text/textarea must match overlay + PDF layout contract (natural image px).
+  const textInputStyle: React.CSSProperties = {
+    ...compactInputStyle,
+    fontSize: fieldLayout?.fontSize ?? (isMobile ? 13 : 15),
+    fontFamily: FIELD_TEXT_FONT_FAMILY,
+    fontWeight: 400,
+    lineHeight: FIELD_TEXT_LINE_HEIGHT,
+    textSizeAdjust: '100%',
+    WebkitTextSizeAdjust: '100%',
   };
+
+  const handleTextChange = (value: string) => {
+    if (composingRef.current) {
+      setLocalValue(value);
+      return;
+    }
+    applyCapacityGatedValue(value);
+  };
+
+  const handleCompositionStart = () => {
+    composingRef.current = true;
+  };
+
+  const handleCompositionEnd = (e: React.CompositionEvent<HTMLTextAreaElement>) => {
+    composingRef.current = false;
+    applyCapacityGatedValue(e.currentTarget.value);
+  };
+
+  const isCapacityFull = Boolean(field && fieldCapacityFull[field.id]);
 
   const renderInput = () => {
     switch (field.type) {
       case 'select':
         return (
           <select
-            style={{ ...inputStyle, cursor: 'pointer' }}
+            style={{ ...compactInputStyle, cursor: 'pointer' }}
             value={localValue}
             onChange={(e) => setLocalValue(e.target.value)}
             onFocus={handleInputFocus}
@@ -248,7 +311,7 @@ export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
         return (
           <input
             type="date"
-            style={inputStyle}
+            style={compactInputStyle}
             value={localValue}
             onChange={(e) => setLocalValue(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -260,7 +323,7 @@ export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
         return (
           <input
             type="number"
-            style={inputStyle}
+            style={compactInputStyle}
             placeholder={field.placeholder || `Enter ${field.label}`}
             value={localValue}
             onChange={(e) => setLocalValue(e.target.value)}
@@ -274,28 +337,52 @@ export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
           <>
             <textarea
               style={{
-                ...inputStyle,
+                ...textInputStyle,
                 minHeight: isMobile ? 56 : 120,
                 resize: isMobile ? 'none' : 'vertical',
-                lineHeight: 1.6,
               }}
               placeholder={field.placeholder || `Enter ${field.label}`}
               value={localValue}
-              maxLength={maxChars}
-              onChange={(e) => handleChange(e.target.value)}
+              onChange={(e) => handleTextChange(e.target.value)}
+              onCompositionStart={handleCompositionStart}
+              onCompositionEnd={handleCompositionEnd}
               onFocus={handleInputFocus}
               autoFocus
             />
-            <div
-              style={{
-                fontSize: isMobile ? 10 : 12,
-                color: localValue.length >= maxChars ? '#ef4444' : '#9ca3af',
-                textAlign: 'right',
-                marginTop: isMobile ? 4 : -8,
-              }}
-            >
-              {localValue.length}/{maxChars}
-            </div>
+            {isCapacityFull && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  marginTop: isMobile ? 4 : 6,
+                  fontSize: isMobile ? 11 : 12,
+                  color: '#b45309',
+                }}
+              >
+                <span
+                  role="img"
+                  aria-label="This field has reached its maximum capacity."
+                  title="This box is full. Please shorten your response."
+                  style={{
+                    width: 16,
+                    height: 16,
+                    borderRadius: '50%',
+                    background: '#fef3c7',
+                    border: '1px solid #f59e0b',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontWeight: 700,
+                    fontSize: 10,
+                    flexShrink: 0,
+                  }}
+                >
+                  !
+                </span>
+                <span>This box is full. Please shorten your response.</span>
+              </div>
+            )}
           </>
         );
     }
