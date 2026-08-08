@@ -27,7 +27,11 @@ import {
   getDragConstraints,
   type Point,
 } from '../utils/mobilePopupConstraints';
-import { resolveFieldLayout } from '../utils/fieldLayout';
+import {
+  FIELD_TEXT_FONT_FAMILY,
+  FIELD_TEXT_LINE_HEIGHT,
+  resolveFieldLayout,
+} from '../utils/fieldLayout';
 import { applyTextCandidate } from '../utils/clampTextToField';
 
 interface Props {
@@ -243,7 +247,7 @@ export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
     }
   };
 
-  const inputStyle: React.CSSProperties = {
+  const compactInputStyle: React.CSSProperties = {
     width: '100%',
     borderRadius: 10,
     border: '1.5px solid #d1d5db',
@@ -255,6 +259,17 @@ export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
     color: '#111827',
     background: '#f9fafb',
     transition: 'border-color 0.15s',
+  };
+
+  // Text/textarea must match overlay + PDF layout contract (natural image px).
+  const textInputStyle: React.CSSProperties = {
+    ...compactInputStyle,
+    fontSize: fieldLayout?.fontSize ?? (isMobile ? 13 : 15),
+    fontFamily: FIELD_TEXT_FONT_FAMILY,
+    fontWeight: 400,
+    lineHeight: FIELD_TEXT_LINE_HEIGHT,
+    textSizeAdjust: '100%',
+    WebkitTextSizeAdjust: '100%',
   };
 
   const handleTextChange = (value: string) => {
@@ -281,7 +296,7 @@ export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
       case 'select':
         return (
           <select
-            style={{ ...inputStyle, cursor: 'pointer' }}
+            style={{ ...compactInputStyle, cursor: 'pointer' }}
             value={localValue}
             onChange={(e) => setLocalValue(e.target.value)}
             onFocus={handleInputFocus}
@@ -296,7 +311,7 @@ export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
         return (
           <input
             type="date"
-            style={inputStyle}
+            style={compactInputStyle}
             value={localValue}
             onChange={(e) => setLocalValue(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -308,7 +323,7 @@ export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
         return (
           <input
             type="number"
-            style={inputStyle}
+            style={compactInputStyle}
             placeholder={field.placeholder || `Enter ${field.label}`}
             value={localValue}
             onChange={(e) => setLocalValue(e.target.value)}
@@ -322,10 +337,9 @@ export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
           <>
             <textarea
               style={{
-                ...inputStyle,
+                ...textInputStyle,
                 minHeight: isMobile ? 56 : 120,
                 resize: isMobile ? 'none' : 'vertical',
-                lineHeight: 1.6,
               }}
               placeholder={field.placeholder || `Enter ${field.label}`}
               value={localValue}
