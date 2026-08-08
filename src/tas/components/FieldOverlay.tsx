@@ -68,7 +68,7 @@ export const FieldOverlay: React.FC<FieldOverlayProps> = ({
   const isSubmitted = submission?.status === 'submitted';
   const isInactive = isReadOnly || isSubmitted;
 
-  const displayFontSize = useAutoFontSize(valueRef, isMobile ? baseFontSize * 0.55 : baseFontSize, fieldValue);
+  const displayFontSize = useAutoFontSize(valueRef, baseFontSize, fieldValue);
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();

@@ -22,6 +22,7 @@ import { SubmissionHistory } from './SubmissionHistory';
 import { RequiredFieldsModal } from './RequiredFieldsModal';
 import { BackNavigationModal } from './BackNavigationModal';
 import { OptionalFieldsSubmitModal } from './OptionalFieldsSubmitModal';
+import { ConfirmSubmitModal } from './ConfirmSubmitModal';
 import { useTasStore } from '../store/tasStore';
 import { useBackNavigationGuard } from '../hooks/useBackNavigationGuard';
 import { submissionsApi, formatApiError } from '../services/api';
@@ -61,6 +62,7 @@ export const TasApp: React.FC = () => {
   const [missingRequiredFields, setMissingRequiredFields] = useState<string[]>([]);
   const [backConfirmOpen, setBackConfirmOpen] = useState(false);
   const [optionalFieldsModalOpen, setOptionalFieldsModalOpen] = useState(false);
+  const [confirmSubmitModalOpen, setConfirmSubmitModalOpen] = useState(false);
 
   // ── Responsive detection ───────────────────────────────────────────────────
   useEffect(() => {
@@ -181,6 +183,10 @@ export const TasApp: React.FC = () => {
 
   // ── Print / Save as PDF ───────────────────────────────────────────────────
   const handlePrint = useCallback(() => {
+    // Close editor first so toolbar actions work over the popup backdrop.
+    // formData (committed values) is unchanged; only dismisses the popup UI.
+    useTasStore.getState().closeFieldEditor();
+
     if (!selectedTemplate) return;
     const imageW = selectedTemplate.image_width || 794;
     const imageH = selectedTemplate.image_height || 1123;
@@ -342,6 +348,10 @@ export const TasApp: React.FC = () => {
   }, [submission, formData, setIsSaving, setSubmission]);
 
   const handleSubmit = useCallback(() => {
+    // Close editor first so Submit is reachable while the popup is open.
+    // formData (committed values) is unchanged; only dismisses the popup UI.
+    useTasStore.getState().closeFieldEditor();
+
     if (!submission || submission.status !== 'draft') return;
 
     const activeFields = getActiveFields(selectedTemplate);
@@ -364,9 +374,8 @@ export const TasApp: React.FC = () => {
       return;
     }
 
-    if (!window.confirm('Submit this assignment? You cannot edit it after submitting.')) return;
-    void submitAssignment();
-  }, [submission, selectedTemplate, formData, submitAssignment]);
+    setConfirmSubmitModalOpen(true);
+  }, [submission, selectedTemplate, formData]);
 
   const handleOptionalContinueHere = useCallback(() => {
     setOptionalFieldsModalOpen(false);
@@ -374,6 +383,15 @@ export const TasApp: React.FC = () => {
 
   const handleOptionalConfirmSubmit = useCallback(() => {
     setOptionalFieldsModalOpen(false);
+    void submitAssignment();
+  }, [submitAssignment]);
+
+  const handleConfirmSubmitCancel = useCallback(() => {
+    setConfirmSubmitModalOpen(false);
+  }, []);
+
+  const handleConfirmSubmitConfirm = useCallback(() => {
+    setConfirmSubmitModalOpen(false);
     void submitAssignment();
   }, [submitAssignment]);
 
@@ -408,6 +426,7 @@ export const TasApp: React.FC = () => {
   }, []);
 
   const openBackConfirm = useCallback(() => {
+    // Close editor first; formData (committed values) is preserved.
     useTasStore.getState().closeFieldEditor();
     setBackConfirmOpen(true);
   }, []);
@@ -432,6 +451,7 @@ export const TasApp: React.FC = () => {
       setRequiredFieldsModalOpen(false);
       setBackConfirmOpen(false);
       setOptionalFieldsModalOpen(false);
+      setConfirmSubmitModalOpen(false);
       allowLeave();
       navigateBackToAssignment(mfeContext, { extraHistoryEntries });
     } catch (err: any) {
@@ -502,6 +522,9 @@ export const TasApp: React.FC = () => {
           flexShrink: 0,
           gap: 8,
           minHeight: 52,
+          // Above FieldEditorPopup backdrop (40) / sheet (50) so toolbar taps register.
+          position: 'relative',
+          zIndex: 60,
         }}
       >
         <div
@@ -760,6 +783,14 @@ export const TasApp: React.FC = () => {
         onClose={handleOptionalContinueHere}
         onContinueHere={handleOptionalContinueHere}
         onConfirmSubmit={handleOptionalConfirmSubmit}
+      />
+
+      <ConfirmSubmitModal
+        isOpen={confirmSubmitModalOpen}
+        isSaving={isSaving}
+        onClose={handleConfirmSubmitCancel}
+        onCancel={handleConfirmSubmitCancel}
+        onConfirmSubmit={handleConfirmSubmitConfirm}
       />
     </div>
   );
