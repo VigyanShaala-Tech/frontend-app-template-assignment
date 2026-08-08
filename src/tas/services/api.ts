@@ -373,11 +373,18 @@ export interface AdminSubmissionListFilterOptions {
   partner_organization: string[];
 }
 
+export interface AdminSubmissionListStatusCounts {
+  submitted: number;
+  approved: number;
+  rejected: number;
+}
+
 export interface AdminSubmissionListResponse {
   count: number;
   next: string | null;
   previous: string | null;
   results: AdminSubmissionListRow[];
+  status_counts: AdminSubmissionListStatusCounts;
 }
 
 export const adminSubmissionsApi = {
@@ -411,11 +418,18 @@ export const adminSubmissionsApi = {
     );
     const results = Array.isArray(data?.results) ? data.results : [];
     const count = typeof data?.count === 'number' ? data.count : results.length;
+    const rawCounts = data?.status_counts;
+    const status_counts: AdminSubmissionListStatusCounts = {
+      submitted: typeof rawCounts?.submitted === 'number' ? rawCounts.submitted : 0,
+      approved: typeof rawCounts?.approved === 'number' ? rawCounts.approved : 0,
+      rejected: typeof rawCounts?.rejected === 'number' ? rawCounts.rejected : 0,
+    };
     return {
       count,
       next: data?.next ?? null,
       previous: data?.previous ?? null,
       results: count > 0 ? results : [],
+      status_counts,
     };
   },
 

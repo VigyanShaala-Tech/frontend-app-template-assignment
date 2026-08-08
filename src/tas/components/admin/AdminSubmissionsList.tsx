@@ -1,7 +1,8 @@
 /**
  * AdminSubmissionsList
- * Shows submitted and rejected submissions for a block.
- * One row per student (latest). "Review" only available for submitted ones.
+ * Shows submissions for a block with toggleable status tabs
+ * (Under Review / Accepted / Reattempt). No status selected → all submissions.
+ * "Review" only available for submitted ones.
  * "Withdraw Feedback" for finalized reviews (approved / rejected).
  */
 
@@ -16,15 +17,28 @@ import { adminSubmissionsApi } from '../../services/api';
 import { useTasStore } from '../../store/tasStore';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { formatSubmissionStatusLabel } from '../../utils/statusLabels';
+import {
+  applyStatusTabToSearchParams,
+  parseStatus,
+  type StatusTabKey,
+} from '../../utils/statusTabParams';
 
 interface Props {
   onView: (submissionId: string) => void;
 }
 
+/** Shared colour source for Status column badges and status filter tabs (Paragon variants). */
 const STATUS_BADGE: Record<string, string> = {
   submitted: 'primary',
+  approved: 'success',
   rejected: 'danger',
 };
+
+const STATUS_TABS: { key: StatusTabKey; label: string }[] = [
+  { key: 'submitted', label: 'Under Review' },
+  { key: 'approved', label: 'Accepted' },
+  { key: 'rejected', label: 'Reattempt' },
+];
 
 const LINK_ACTION_STYLE: React.CSSProperties = {
   fontWeight: 700,
@@ -108,6 +122,7 @@ export const AdminSubmissionsList: React.FC<Props> = ({ onView }) => {
   const emailFilter = searchParams.get('email') ?? '';
   const submittedAfter = searchParams.get('submitted_after') ?? '';
   const submittedBefore = searchParams.get('submitted_before') ?? '';
+  const statusFilter = parseStatus(searchParams.get('status'));
   const sortBy = parseSortBy(searchParams.get('sort_by'));
   const sortDir = parseSortDir(searchParams.get('sort_dir'));
   const page = parsePage(searchParams.get('page'));
@@ -117,6 +132,7 @@ export const AdminSubmissionsList: React.FC<Props> = ({ onView }) => {
 
   const listQueryParams = useMemo(() => ({
     usage_key: usageKey,
+    ...(statusFilter ? { status: statusFilter } : {}),
     ...(collegeFilter ? { college: collegeFilter } : {}),
     ...(universityFilter ? { university: universityFilter } : {}),
     ...(partnerFilter ? { partner: partnerFilter } : {}),
@@ -129,6 +145,7 @@ export const AdminSubmissionsList: React.FC<Props> = ({ onView }) => {
     page_size: 24,
   }), [
     usageKey,
+    statusFilter,
     collegeFilter,
     universityFilter,
     partnerFilter,
@@ -170,8 +187,15 @@ export const AdminSubmissionsList: React.FC<Props> = ({ onView }) => {
     setSearchParams(next, { replace: true });
   };
 
+  const setStatusTab = (status: StatusTabKey) => {
+    setSearchParams(
+      applyStatusTabToSearchParams(searchParams, statusFilter, status),
+      { replace: true },
+    );
+  };
+
   const clearFilters = () => {
-    // Clear filter params only — leave sort_by / sort_dir unchanged.
+    // Clear filter-bar params only — leave status tab and sort unchanged.
     const next = new URLSearchParams(searchParams);
     FILTER_PARAM_KEYS.forEach((key) => next.delete(key));
     next.delete('page');
@@ -247,6 +271,10 @@ export const AdminSubmissionsList: React.FC<Props> = ({ onView }) => {
   const hasNextPage = !!data?.next;
   const hasPreviousPage = !!data?.previous;
   const isWithdrawing = withdrawMut.isPending;
+  const statusCounts = data?.status_counts ?? { submitted: 0, approved: 0, rejected: 0 };
+  const activeStatusLabel = statusFilter
+    ? formatSubmissionStatusLabel(statusFilter)
+    : '';
 
   const collegeOptions = filterOptionsData?.college_name ?? [];
   const universityOptions = filterOptionsData?.university_name ?? [];
@@ -260,6 +288,51 @@ export const AdminSubmissionsList: React.FC<Props> = ({ onView }) => {
   const countLabel = hasActiveFilters
     ? `${totalCount} matching submission${totalCount !== 1 ? 's' : ''}`
     : `${totalCount} submission${totalCount !== 1 ? 's' : ''}`;
+
+  const renderStatusTabs = () => (
+    <div
+      className="d-flex align-items-end mb-3"
+      style={{ gap: '0.5rem', overflowX: 'auto' }}
+      role="tablist"
+      aria-label="Submission status"
+    >
+      {STATUS_TABS.map(({ key, label }) => {
+        const isActive = statusFilter === key;
+        const variant = STATUS_BADGE[key];
+        const count = statusCounts[key] ?? 0;
+        return (
+          <div
+            key={key}
+            style={{
+              flex: '0 0 auto',
+              borderBottom: isActive
+                ? '2px solid var(--pgn-color-primary-500)'
+                : '2px solid transparent',
+              paddingBottom: 2,
+            }}
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              className={`badge badge-${variant} d-inline-flex align-items-center border-0`}
+              onClick={() => setStatusTab(key)}
+              style={statusTabStyle}
+            >
+              <span style={{ fontWeight: 700, color: '#fff' }}>{label}</span>
+              <span
+                className="d-inline-flex align-items-center justify-content-center"
+                style={statusCountPillStyle}
+                aria-label={`${count} ${label}`}
+              >
+                {count}
+              </span>
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
 
   return (
     <div className="d-flex flex-column h-100">
@@ -354,22 +427,32 @@ export const AdminSubmissionsList: React.FC<Props> = ({ onView }) => {
           <div className="alert alert-danger">Failed to load submissions.</div>
         )}
 
-        {!isLoading && !isError && totalCount === 0 && !hasActiveFilters && (
-          <div className="text-center pt-5 text-muted">
-            <p>No submissions yet for this block.</p>
-          </div>
-        )}
+        {!isLoading && !isError && (
+          <>
+            {renderStatusTabs()}
 
-        {!isLoading && !isError && totalCount === 0 && hasActiveFilters && (
-          <div className="text-center pt-5 text-muted">
-            <p className="mb-2">No submissions match these filters.</p>
-            <Button variant="link" size="sm" onClick={clearFilters}>
-              Clear Filters
-            </Button>
-          </div>
-        )}
+            {totalCount === 0 && statusFilter !== null && (
+              <div className="text-center pt-5 text-muted">
+                <p>No {activeStatusLabel} submissions.</p>
+              </div>
+            )}
 
-        {!isLoading && !isError && totalCount > 0 && (
+            {totalCount === 0 && statusFilter === null && !hasActiveFilters && (
+              <div className="text-center pt-5 text-muted">
+                <p>No submissions yet for this block.</p>
+              </div>
+            )}
+
+            {totalCount === 0 && statusFilter === null && hasActiveFilters && (
+              <div className="text-center pt-5 text-muted">
+                <p className="mb-2">No submissions match these filters.</p>
+                <Button variant="link" size="sm" onClick={clearFilters}>
+                  Clear Filters
+                </Button>
+              </div>
+            )}
+
+            {totalCount > 0 && (
           <div className="bg-white rounded shadow-sm" style={{ overflow: 'hidden' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
@@ -504,6 +587,8 @@ export const AdminSubmissionsList: React.FC<Props> = ({ onView }) => {
               </div>
             )}
           </div>
+            )}
+          </>
         )}
 
         {withdrawMut.isError && (
@@ -585,4 +670,26 @@ const sortableThButtonStyle: React.CSSProperties = {
 const tdStyle: React.CSSProperties = {
   padding: '14px 16px',
   verticalAlign: 'middle',
+};
+
+const statusTabStyle: React.CSSProperties = {
+  gap: '0.5rem',
+  padding: '0.45rem 0.75rem',
+  fontSize: '0.875rem',
+  lineHeight: 1.2,
+  cursor: 'pointer',
+  whiteSpace: 'nowrap',
+  flex: '0 0 auto',
+};
+
+const statusCountPillStyle: React.CSSProperties = {
+  minWidth: '1.35rem',
+  height: '1.35rem',
+  padding: '0 0.35rem',
+  borderRadius: '999px',
+  background: 'rgba(0, 0, 0, 0.22)',
+  color: '#fff',
+  fontSize: '0.75rem',
+  fontWeight: 700,
+  lineHeight: 1,
 };
