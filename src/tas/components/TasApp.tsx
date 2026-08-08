@@ -28,7 +28,9 @@ import { useBackNavigationGuard } from '../hooks/useBackNavigationGuard';
 import { submissionsApi, formatApiError } from '../services/api';
 import { navigateBackToAssignment } from '../utils/navigateBackToAssignment';
 import { getActiveFields, isFieldEmpty } from '../utils/activeFields';
-import type { SubmissionVersion } from '../types';
+import { resolveFieldLayout, FIELD_TEXT_FONT_FAMILY } from '../utils/fieldLayout';
+import { clampFormDataToFields } from '../utils/clampTextToField';
+import type { FormField, SubmissionVersion } from '../types';
 
 const SUBMIT_GREEN = '#69AB4A';
 
@@ -193,21 +195,20 @@ export const TasApp: React.FC = () => {
 
     const fieldsHtml = selectedTemplate.fields.map((field) => {
       const pos = selectedTemplate.field_positions[field.id];
-      const raw = formData[field.id] ?? '';
-      const maxChars = field.maxChars ?? 60;
-      const value = raw.slice(0, maxChars);
+      const value = formData[field.id] ?? '';
       if (!pos || !value) return '';
-      const fieldHeightPx = imageH * pos.height / 100;
-      const baseFontSize = field.fontSize ?? Math.max(10, Math.min(20, fieldHeightPx * 0.6));
+      const layout = resolveFieldLayout(field, pos, imageW, imageH);
       return `
         <div style="
           position:absolute;
           left:${pos.x}%;top:${pos.y}%;
           width:${pos.width}%;height:${pos.height}%;
-          font-size:${baseFontSize}px;
-          font-weight:500;color:#111827;
+          font-family:${FIELD_TEXT_FONT_FAMILY};
+          font-size:${layout.fontSize}px;
+          font-weight:400;color:#111827;
           overflow:hidden;padding:2px;box-sizing:border-box;
           line-height:1.3;white-space:pre-wrap;
+          overflow-wrap:anywhere;word-break:break-word;
         ">${value.replace(/</g, '&lt;')}</div>`;
     }).join('');
 
@@ -313,13 +314,42 @@ export const TasApp: React.FC = () => {
   }, [submission, formData, setIsSaving, setSubmission]);
 
   // ── Submit handler ─────────────────────────────────────────────────────────
+  const clampFormDataForSubmit = useCallback((data: Record<string, string>) => {
+    if (!selectedTemplate) {
+      return { formData: data, capacityFull: {} as Record<string, boolean> };
+    }
+    const imageW = selectedTemplate.image_width || 794;
+    const imageH = selectedTemplate.image_height || 1123;
+    const layoutsByFieldId: Record<string, ReturnType<typeof resolveFieldLayout>> = {};
+
+    getActiveFields(selectedTemplate).forEach((field: FormField) => {
+      if (field.type === 'select' || field.type === 'date' || field.type === 'number'
+        || field.type === 'checkbox' || field.type === 'radio') {
+        return;
+      }
+      const pos = selectedTemplate.field_positions[field.id];
+      if (!pos) return;
+      layoutsByFieldId[field.id] = resolveFieldLayout(field, pos, imageW, imageH);
+    });
+
+    return clampFormDataToFields(data, layoutsByFieldId);
+  }, [selectedTemplate]);
+
   const submitAssignment = useCallback(async () => {
     if (!submission || submission.status !== 'draft') return;
 
     try {
       setIsSaving(true);
-      // Save latest form data first, then submit
-      await submissionsApi.patch(submission.id, formData);
+      // Defensive clamp so stale/legacy values cannot overflow the PDF boxes.
+      const { formData: clampedData, capacityFull } = clampFormDataForSubmit(formData);
+      if (Object.keys(capacityFull).length > 0) {
+        setFormData(clampedData);
+        useTasStore.getState().setFieldCapacityFullMap({
+          ...useTasStore.getState().fieldCapacityFull,
+          ...capacityFull,
+        });
+      }
+      await submissionsApi.patch(submission.id, clampedData);
       const submitted = await submissionsApi.submit(submission.id);
       setSubmission(submitted);
     } catch (err: any) {
@@ -345,7 +375,7 @@ export const TasApp: React.FC = () => {
     } finally {
       setIsSaving(false);
     }
-  }, [submission, formData, setIsSaving, setSubmission]);
+  }, [submission, formData, setIsSaving, setSubmission, setFormData, clampFormDataForSubmit]);
 
   const handleSubmit = useCallback(() => {
     // Close editor first so Submit is reachable while the popup is open.
