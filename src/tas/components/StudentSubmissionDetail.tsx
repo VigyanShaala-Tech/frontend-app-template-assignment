@@ -1,12 +1,15 @@
 /**
  * StudentSubmissionDetail
- * Two-column view: submitted PDF (left) + instructor feedback (right).
+ * Desktop: two-column view — submitted PDF (left) + instructor feedback (right).
+ * Mobile: Feedback-only; View/Download PDF in the Feedback header (no iframe).
  */
 
 import React from 'react';
 import { Badge, Button, Card } from '@openedx/paragon';
 import { ArrowBack } from '@openedx/paragon/icons';
 import type { SubmissionVersion } from '../types';
+import { useTasStore } from '../store/tasStore';
+import { downloadPdf } from '../utils/downloadPdf';
 import { stripCategoryHeadingsFromComment } from '../utils/flattenStudentFeedback';
 import { InstructorCommentHtml } from './admin/InstructorCommentHtml';
 import { SubmissionPdfViewer } from './SubmissionPdfViewer';
@@ -22,9 +25,54 @@ const FEEDBACK_BADGE: Record<string, string> = {
   rejected: 'danger',
 };
 
+const headerPdfBtnStyle: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 4,
+  minHeight: 36,
+  padding: '6px 12px',
+  border: 'none',
+  borderRadius: 6,
+  fontWeight: 600,
+  fontSize: 12,
+  cursor: 'pointer',
+  whiteSpace: 'nowrap',
+};
+
 export const StudentSubmissionDetail: React.FC<Props> = ({ version, onBack }) => {
+  const isMobile = useTasStore((s) => s.isMobile);
   const displayComment = stripCategoryHeadingsFromComment(version.instructor_comment ?? '');
   const pdfUrl = version.pdf_url || version.download_url;
+  const downloadFilename = `submission_v${version.version_number}.pdf`;
+
+  const mobilePdfActions = pdfUrl ? (
+    <div
+      className="tas-student-feedback-header-actions"
+      style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        justifyContent: 'flex-end',
+        gap: 6,
+        maxWidth: '100%',
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => window.open(pdfUrl, '_blank')}
+        style={{ ...headerPdfBtnStyle, background: '#4b5563', color: '#fff' }}
+      >
+        View PDF
+      </button>
+      <button
+        type="button"
+        onClick={() => { void downloadPdf(pdfUrl, downloadFilename); }}
+        style={{ ...headerPdfBtnStyle, background: '#2563eb', color: '#fff' }}
+      >
+        ↓ Download PDF
+      </button>
+    </div>
+  ) : undefined;
 
   return (
     <div className="d-flex flex-column h-100">
@@ -49,18 +97,23 @@ export const StudentSubmissionDetail: React.FC<Props> = ({ version, onBack }) =>
 
       <div className="flex-grow-1 overflow-auto p-4" style={{ background: '#e5e7eb' }}>
         <div className="row">
-          <div className="col-12 col-lg-6 mb-4">
-            <SubmissionPdfViewer
-              pdfUrl={pdfUrl}
-              title="Submitted Assignment"
-              showViewPdf
-              downloadFilename={`submission_v${version.version_number}.pdf`}
-            />
-          </div>
+          {!isMobile && (
+            <div className="col-12 col-lg-6 mb-4">
+              <SubmissionPdfViewer
+                pdfUrl={pdfUrl}
+                title="Submitted Assignment"
+                showViewPdf
+                downloadFilename={downloadFilename}
+              />
+            </div>
+          )}
 
-          <div className="col-12 col-lg-6 mb-4">
+          <div className={`col-12 ${isMobile ? '' : 'col-lg-6'} mb-4`}>
             <Card className="shadow-sm">
-              <Card.Header title="Feedback" />
+              <Card.Header
+                title="Feedback"
+                actions={isMobile ? mobilePdfActions : undefined}
+              />
               <Card.Section>
                 {!version.feedback_available && (
                   <p className="text-muted small mb-0">

@@ -226,6 +226,16 @@
     text-size-adjust: 100%;
   }
 
+  // Student View Feedback: allow Feedback title + PDF actions to wrap on narrow screens
+  .tas-student-feedback-header-actions {
+    max-width: 100%;
+  }
+
+  .pgn__card-header:has(.tas-student-feedback-header-actions) {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
   .tas-toolbar {
     flex-wrap: wrap;
     padding: 8px 12px;
