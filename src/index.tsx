@@ -1,13 +1,14 @@
 import 'core-js/stable';
 import 'regenerator-runtime/runtime';
 
+import React, { useEffect, useState } from 'react';
 import {
   APP_INIT_ERROR, APP_READY, subscribe, initialize,
 } from '@edx/frontend-platform';
 import { AppProvider, ErrorPage } from '@edx/frontend-platform/react';
 import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation, matchPath } from 'react-router-dom';
 
 import Header from '@edx/frontend-component-header';
 import { FooterSlot } from '@edx/frontend-component-footer';
@@ -25,6 +26,58 @@ const queryClient = new QueryClient({
   },
 });
 
+const MOBILE_BREAKPOINT = 768;
+
+/**
+ * MFE chrome shell: hide LMS Header/Footer only on the mobile student submission route.
+ */
+const AppShell: React.FC = () => {
+  const location = useLocation();
+  const [isMobile, setIsMobile] = useState(
+    () => (typeof window !== 'undefined' ? window.innerWidth < MOBILE_BREAKPOINT : false),
+  );
+
+  useEffect(() => {
+    const handle = () => setIsMobile(window.innerWidth < MOBILE_BREAKPOINT);
+    handle();
+    window.addEventListener('resize', handle);
+    return () => window.removeEventListener('resize', handle);
+  }, []);
+
+  const isStudentSubmission = Boolean(
+    matchPath({ path: '/submission/:usageKey', end: true }, location.pathname),
+  );
+  const hideChrome = isStudentSubmission && isMobile;
+
+  return (
+    <>
+      {!hideChrome && <Header />}
+      <main
+        style={{
+          minHeight: hideChrome ? '100vh' : 'calc(100vh - 120px)',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
+        <Routes>
+          {/* Student submission view */}
+          <Route path="/submission/:usageKey" element={<StudentPage />} />
+
+          {/* Instructor grading view */}
+          <Route path="/instructor/grade-submissions/:usageKey" element={<InstructorPage />} />
+
+          {/* Admin — template/type management (staff only) */}
+          <Route path="/admin/templates" element={<AdminPage />} />
+
+          {/* Fallback */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </main>
+      {!hideChrome && <FooterSlot />}
+    </>
+  );
+};
+
 const container = document.getElementById('root');
 const root = createRoot(container!);
 
@@ -33,23 +86,7 @@ subscribe(APP_READY, () => {
     // AppProvider already includes BrowserRouter internally
     <AppProvider>
       <QueryClientProvider client={queryClient}>
-        <Header />
-        <main style={{ minHeight: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column' }}>
-          <Routes>
-            {/* Student submission view */}
-            <Route path="/submission/:usageKey" element={<StudentPage />} />
-
-            {/* Instructor grading view */}
-            <Route path="/instructor/grade-submissions/:usageKey" element={<InstructorPage />} />
-
-            {/* Admin — template/type management (staff only) */}
-            <Route path="/admin/templates" element={<AdminPage />} />
-
-            {/* Fallback */}
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </main>
-        <FooterSlot />
+        <AppShell />
       </QueryClientProvider>
     </AppProvider>,
   );
