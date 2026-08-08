@@ -40,6 +40,7 @@ interface Props {
 
 const STATUS_BADGE: Record<string, string> = {
   submitted: 'primary',
+  approved: 'success',
   rejected: 'danger',
   draft: 'secondary',
 };
