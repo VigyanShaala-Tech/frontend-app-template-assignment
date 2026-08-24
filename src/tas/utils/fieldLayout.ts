@@ -1,6 +1,9 @@
 /**
  * Canonical field text layout for template overlay, fit-checking, and print HTML.
- * Must stay aligned with tas_integration/tas_app/pdf_generator.py.
+ * Must stay aligned with tas_integration/tas_app/pdf_generator.py:
+ * fontSize ?? max(10, min(20, h * 0.6)), padding 2px, line-height 1.3,
+ * pre-wrap / overflow-wrap:anywhere / word-break:break-word, overflow hidden.
+ * Stored PDFs embed bundled Liberation Sans Regular (Arial-metric), not a host OS font.
  */
 
 import type { CSSProperties } from 'react';
