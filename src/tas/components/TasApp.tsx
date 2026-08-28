@@ -382,29 +382,51 @@ export const TasApp: React.FC = () => {
     // formData (committed values) is unchanged; only dismisses the popup UI.
     useTasStore.getState().closeFieldEditor();
 
-    if (!submission || submission.status !== 'draft') return;
-
-    const activeFields = getActiveFields(selectedTemplate);
-
-    const missing = activeFields
-      .filter((f) => f.required && isFieldEmpty(formData, f.id))
-      .map((f) => f.label);
-
-    if (missing.length > 0) {
-      setMissingRequiredFields(missing);
-      setRequiredFieldsModalOpen(true);
-      return;
+    // Explicitly blur any still-focused field input so the on-screen keyboard is
+    // told to dismiss immediately, rather than relying on React unmounting the
+    // field-editor popup to do it implicitly. On some Android WebViews (e.g. the
+    // native app's embedded browser), removing a focused node from the DOM does
+    // not reliably trigger the keyboard-close + viewport-resize sequence, which
+    // leaves window/visualViewport metrics stale for a moment.
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
     }
 
-    const hasEmptyOptional = activeFields.some(
-      (f) => !f.required && isFieldEmpty(formData, f.id),
-    );
-    if (hasEmptyOptional) {
-      setOptionalFieldsModalOpen(true);
-      return;
-    }
+    // Defer the rest of submit validation/modal-opening by one frame. The submit
+    // confirmation modals are plain Paragon `ModalDialog`s that center themselves
+    // with static `vh`-based CSS (unlike the field-editor popup, which measures
+    // `visualViewport` live). If we open one of those modals in the very same
+    // paint as the keyboard-dismiss above, some WebViews compute that centering
+    // against the still-shrunk (keyboard-open) viewport height — the backdrop
+    // (simple `position: fixed; inset: 0`) still covers the screen correctly, but
+    // the dialog box itself can end up positioned outside the visible area.
+    // Waiting a frame lets the viewport settle first. This only changes *when*
+    // the existing checks run, not the checks/branching themselves.
+    requestAnimationFrame(() => {
+      if (!submission || submission.status !== 'draft') return;
 
-    setConfirmSubmitModalOpen(true);
+      const activeFields = getActiveFields(selectedTemplate);
+
+      const missing = activeFields
+        .filter((f) => f.required && isFieldEmpty(formData, f.id))
+        .map((f) => f.label);
+
+      if (missing.length > 0) {
+        setMissingRequiredFields(missing);
+        setRequiredFieldsModalOpen(true);
+        return;
+      }
+
+      const hasEmptyOptional = activeFields.some(
+        (f) => !f.required && isFieldEmpty(formData, f.id),
+      );
+      if (hasEmptyOptional) {
+        setOptionalFieldsModalOpen(true);
+        return;
+      }
+
+      setConfirmSubmitModalOpen(true);
+    });
   }, [submission, selectedTemplate, formData]);
 
   const handleOptionalContinueHere = useCallback(() => {

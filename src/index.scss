@@ -307,6 +307,25 @@
       gap: 8px;
     }
   }
+
+  // Submit confirmation popups (RequiredFieldsModal / OptionalFieldsSubmitModal /
+  // ConfirmSubmitModal) are Paragon `ModalDialog`s, which center themselves using
+  // static `100vh` / `min-height: 100vh` (see @openedx/paragon Modal/index.scss).
+  // On some Android WebViews, `vh` is computed against the layout viewport
+  // *including* the space reserved for a just-closed on-screen keyboard, so the
+  // dialog box can be centered/positioned outside the visible screen — the
+  // backdrop (`position: fixed; inset: 0`) still paints fine, so only the dialog
+  // appears to be missing. `dvh` reflects the browser's actual visible viewport;
+  // unsupported browsers simply ignore the rule and keep the `vh` value above.
+  .pgn__modal-layer {
+    /* stylelint-disable-next-line unit-no-unknown -- dvh is a valid modern CSS unit */
+    height: 100dvh;
+  }
+
+  .pgn__modal-content-container {
+    /* stylelint-disable-next-line unit-no-unknown -- dvh is a valid modern CSS unit */
+    min-height: 100dvh;
+  }
 }
 
 // Tier 2: larger mobile — scrollable history table
