@@ -261,11 +261,10 @@ export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
     transition: 'border-color 0.15s',
   };
 
-  // Modal entry text is a fixed 12px for readability. Template overlay/PDF/capacity
-  // still use fieldLayout.fontSize independently (applyCapacityGatedValue).
+  // Text/textarea must match overlay + PDF layout contract (natural image px).
   const textInputStyle: React.CSSProperties = {
     ...compactInputStyle,
-    fontSize: isMobile ? 12 : 14,
+    fontSize: fieldLayout?.fontSize ?? (isMobile ? 13 : 15),
     fontFamily: FIELD_TEXT_FONT_FAMILY,
     fontWeight: 400,
     lineHeight: FIELD_TEXT_LINE_HEIGHT,
