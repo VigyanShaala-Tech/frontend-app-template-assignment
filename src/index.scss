@@ -3,6 +3,38 @@
 @import "~@edx/frontend-component-header/dist/index";
 @import "~@edx/frontend-component-footer/dist/footer";
 
+// ── Paragon ModalDialog safety net ─────────────────────────────────────────
+// Every confirmation popup in the student submit flow (Submit, Back, Clear All,
+// Required/Optional field warnings) is a Paragon `ModalDialog`. Its box (backdrop
+// aside) is entirely styled through CSS custom properties defined in the brand's
+// Paragon token stylesheet (--pgn-color-modal-content-bg, --pgn-elevation-modal-
+// zindex, etc.) — see @openedx/paragon Modal/_ModalDialog.scss and Modal/index.scss.
+// If that token stylesheet doesn't apply for any reason in a given runtime (seen
+// so far only inside the Android native app's embedded WebView, not in a regular
+// mobile/desktop browser hitting the same deployed page), those custom properties
+// resolve to nothing, which can leave the dialog box transparent/undersized/behind
+// other layers while its separate, plain-CSS backdrop still paints correctly —
+// exactly the "gray overlay with no popup" symptom.
+//
+// `var(--token, fallback)` only ever uses `fallback` when `--token` is truly
+// unset, so this changes nothing anywhere the token stylesheet already loads
+// (i.e. every environment this app is currently verified to work in) and only
+// acts as a safety net in the broken one.
+.pgn__modal-layer {
+  z-index: var(--pgn-elevation-modal-zindex, 1050);
+}
+
+.pgn__modal-backdrop {
+  background: var(--pgn-color-modal-backdrop-bg, #000000);
+  opacity: var(--pgn-other-modal-opacity, .5);
+}
+
+.pgn__modal {
+  background: var(--pgn-color-modal-content-bg, #FFFFFF);
+  border-color: var(--pgn-color-modal-content-border, #E5E7EB);
+  border-radius: calc(var(--pgn-size-modal-content-border-radius, 8px) - var(--pgn-size-modal-content-border-width, 0px));
+}
+
 // ── TAS field overlay styles ────────────────────────────────────────────────
 
 .tas-canvas-wrap {
