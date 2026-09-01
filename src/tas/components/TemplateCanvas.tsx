@@ -96,7 +96,7 @@ export const TemplateCanvas: React.FC<Props> = ({ template, readOnly = false }) 
           });
         }}
       >
-        {({ zoomIn, zoomOut, resetTransform }) => (
+        {({ zoomIn, zoomOut, centerView }) => (
           <>
             {/* Zoom controls */}
             <div style={{
@@ -106,7 +106,7 @@ export const TemplateCanvas: React.FC<Props> = ({ template, readOnly = false }) 
               {[
                 { label: '+', action: () => zoomIn() },
                 { label: '−', action: () => zoomOut() },
-                { label: '↺', action: () => resetTransform() },
+                { label: '↺', action: () => centerView(1) },
               ].map(({ label, action }) => (
                 <button
                   key={label}

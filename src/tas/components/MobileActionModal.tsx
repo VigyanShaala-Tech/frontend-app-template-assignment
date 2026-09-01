@@ -3,23 +3,33 @@
  * In-tree fixed overlay for student confirmation dialogs on mobile / APK WebView.
  * Desktop continues to use Paragon ModalDialog (portal + 100vh centering).
  *
- * Pattern matches FieldEditorPopup MobileFloatingPopup: position:fixed + visualViewport,
- * no portal, no FocusOn scroll-lock. z-index sits above the toolbar (60).
+ * Anchored to .tas-toolbar in layout/client coordinates (position:fixed).
+ * No portal, no FocusOn scroll-lock, no 50%/100vh vertical centering.
  */
 
-import React, { useLayoutEffect, useRef, useState } from 'react';
+import React, { useLayoutEffect, useState } from 'react';
 import { useVisualViewportRect } from '../hooks/useVisualViewportRect';
 
 const BACKDROP_Z = 70;
 const SHEET_Z = 80;
-const MARGIN = 16;
+const GAP = 12;
+const HORIZONTAL_MARGIN = 16;
 const MAX_WIDTH = 360;
+const MIN_MAX_HEIGHT = 120;
+const TOOLBAR_SELECTOR = '.tas-toolbar';
 
 interface Props {
   isOpen: boolean;
   title: string;
   onClose: () => void;
   children: React.ReactNode;
+}
+
+function readToolbarBottom(): number | null {
+  if (typeof document === 'undefined') return null;
+  const el = document.querySelector(TOOLBAR_SELECTOR);
+  if (!(el instanceof HTMLElement)) return null;
+  return el.getBoundingClientRect().bottom;
 }
 
 export const MobileActionModal: React.FC<Props> = ({
@@ -29,37 +39,62 @@ export const MobileActionModal: React.FC<Props> = ({
   children,
 }) => {
   const viewportRect = useVisualViewportRect(isOpen);
-  const sheetRef = useRef<HTMLDivElement>(null);
-  const [sheetSize, setSheetSize] = useState({ width: 280, height: 200 });
+  const [toolbarBottom, setToolbarBottom] = useState<number | null>(null);
 
   useLayoutEffect(() => {
-    if (!isOpen) return undefined;
-    const el = sheetRef.current;
-    if (!el) return undefined;
+    if (!isOpen) {
+      setToolbarBottom(null);
+      return undefined;
+    }
 
-    const updateSize = () => {
-      setSheetSize({ width: el.offsetWidth, height: el.offsetHeight });
+    const measure = () => setToolbarBottom(readToolbarBottom());
+    measure();
+
+    const toolbar = document.querySelector(TOOLBAR_SELECTOR);
+    const ro = toolbar && typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(measure)
+      : null;
+    if (toolbar && ro) ro.observe(toolbar);
+
+    window.addEventListener('resize', measure);
+    const vv = window.visualViewport;
+    vv?.addEventListener('resize', measure);
+    vv?.addEventListener('scroll', measure);
+
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener('resize', measure);
+      vv?.removeEventListener('resize', measure);
+      vv?.removeEventListener('scroll', measure);
     };
-
-    updateSize();
-    const ro = new ResizeObserver(updateSize);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [isOpen, title]);
+  }, [isOpen, viewportRect]);
 
   if (!isOpen) return null;
 
-  const maxH = Math.max(0, viewportRect.height - MARGIN * 2);
+  // toolbarBottom is layout/client Y (same as position:fixed). Do not add offsetTop.
+  const backdropTop = toolbarBottom ?? viewportRect.top;
+  const sheetTop = backdropTop + GAP;
   const sheetW = Math.min(viewportRect.width * 0.86, MAX_WIDTH);
-  const sheetH = Math.min(sheetSize.height, maxH);
   const left = viewportRect.left + Math.max(
-    MARGIN,
+    HORIZONTAL_MARGIN,
     (viewportRect.width - sheetW) / 2,
   );
-  const top = viewportRect.top + Math.max(
-    MARGIN,
-    (viewportRect.height - sheetH) / 2,
-  );
+  const visualBottomClient = viewportRect.top + viewportRect.height;
+  const maxH = Math.max(MIN_MAX_HEIGHT, visualBottomClient - sheetTop - GAP);
+
+  const nodeEnv = (globalThis as { process?: { env?: { NODE_ENV?: string } } })
+    .process?.env?.NODE_ENV;
+  if (nodeEnv === 'development') {
+    // eslint-disable-next-line no-console -- coordinate-space check during local/dev only
+    console.debug('[MobileActionModal]', {
+      toolbarBottom,
+      offsetTop: viewportRect.top,
+      sheetTop,
+      backdropTop,
+      left,
+      maxH,
+    });
+  }
 
   return (
     <>
@@ -68,20 +103,22 @@ export const MobileActionModal: React.FC<Props> = ({
         onClick={onClose}
         style={{
           position: 'fixed',
-          inset: 0,
+          top: backdropTop,
+          left: 0,
+          right: 0,
+          bottom: 0,
           background: 'rgba(0, 0, 0, 0.5)',
           zIndex: BACKDROP_Z,
         }}
       />
       <div
-        ref={sheetRef}
         role="dialog"
         aria-label={title}
         aria-modal="true"
         style={{
           position: 'fixed',
           left,
-          top,
+          top: sheetTop,
           width: '86vw',
           maxWidth: MAX_WIDTH,
           maxHeight: maxH,
