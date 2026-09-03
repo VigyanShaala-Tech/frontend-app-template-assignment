@@ -1,0 +1,63 @@
+# GitHub Actions Workflow for Deploying Open edX MFE changes to VigyanShaala UAT EC2
+# This workflow can be triggered manually from the 'Actions' tab via workflow_dispatch
+# or automatically on any commit or PR merge to the "uat" branch.
+# The script checks out the repository, sets up SSH, verifies the host key, and deploys Open edX on the remote EC2 instance.
+
+name: Deploy Open edX MFE changes to VigyanShaala UAT EC2
+
+on:
+  # Allows manual triggering from the Actions tab
+  workflow_dispatch:
+  # Automatically trigger on push or pull request merged to uat branch
+  push:
+    branches: [uat]
+  pull_request:
+    branches: [uat]
+    types: [closed]  # only triggers when a PR is closed (i.e., merged or closed without merging)
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || 
+        (github.event_name == 'push' && github.ref == 'refs/heads/uat') || 
+        (github.event_name == 'pull_request' && github.ref == 'refs/heads/uat' && github.event.pull_request.merged == true)
+    runs-on: ubuntu-latest
+    concurrency:
+      group: uat-deploy
+      cancel-in-progress: true
+
+    steps:
+      - name: 📦 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🔐 Set up SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+        # Adds the SSH private key stored in repository secrets to the agent
+
+      - name: 📩 Add EC2 host key to known_hosts
+        run: |
+          # Ensure the .ssh directory exists
+          mkdir -p ~/.ssh
+          # Fetch remote host key to prevent MITM attacks
+          echo "Scanning and adding EC2 host key to known_hosts..."
+          ssh-keyscan -H "${{ secrets.EC2_IP_ADDRESS }}" >> ~/.ssh/known_hosts
+
+      - name: 🚀 Deploying Open edX to UAT EC2 Instance
+        run: |
+          echo "Starting deployment to UAT EC2 instance: ${{ secrets.EC2_IP_ADDRESS }}"
+          ssh "${{ secrets.SSH_USERNAME }}@${{ secrets.EC2_IP_ADDRESS }}" "bash -se" << 'EOF'
+            set -euo pipefail
+
+            echo "🔹 Activating Python virtual environment for Tutor"
+            # Activate the virtual environment where Tutor is installed
+            source ~/tutor-env/bin/activate
+
+            echo "🔹 Building MFE Docker images"
+            tutor images build mfe --no-cache
+
+            echo "🔹 Starting MFE using Tutor"
+            tutor local start -d
+
+            echo "✅ Deployment completed successfully on UAT EC2 instance!"
+          EOF

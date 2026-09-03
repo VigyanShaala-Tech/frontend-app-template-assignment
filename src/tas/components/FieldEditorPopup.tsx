@@ -264,7 +264,7 @@ export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
   // Text/textarea must match overlay + PDF layout contract (natural image px).
   const textInputStyle: React.CSSProperties = {
     ...compactInputStyle,
-    fontSize: fieldLayout?.fontSize ?? (isMobile ? 13 : 15),
+    fontSize: isMobile ? 13 : 15,
     fontFamily: FIELD_TEXT_FONT_FAMILY,
     fontWeight: 400,
     lineHeight: FIELD_TEXT_LINE_HEIGHT,

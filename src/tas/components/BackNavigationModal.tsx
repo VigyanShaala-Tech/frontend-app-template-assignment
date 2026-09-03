@@ -1,11 +1,15 @@
 /**
  * BackNavigationModal
  * Custom confirmation when the student taps Back — replaces the native browser confirm.
+ *
+ * Desktop: Paragon ModalDialog. Mobile/APK: in-tree MobileActionModal.
  */
 
 import React from 'react';
 import { ModalDialog, Icon } from '@openedx/paragon';
 import { Undo, CheckCircle } from '@openedx/paragon/icons';
+import { useTasStore } from '../store/tasStore';
+import { MobileActionModal } from './MobileActionModal';
 
 const SUBMIT_GREEN = '#69AB4A';
 
@@ -55,26 +59,65 @@ export const BackNavigationModal: React.FC<Props> = ({
   onClose,
   onContinueHere,
   onSaveAndGoBack,
-}) => (
-  <ModalDialog
-    title="Oops! Did you press Back by mistake?"
-    isOpen={isOpen}
-    onClose={onClose}
-    size="md"
-    hasCloseButton
-    isOverflowVisible={false}
-  >
-    <ModalDialog.Header>
+}) => {
+  const isMobile = useTasStore((s) => s.isMobile);
+
+  const headerBlock = (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        textAlign: 'center',
+        gap: 14,
+        paddingTop: 8,
+        paddingRight: 24,
+        width: '100%',
+      }}
+    >
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: 56,
+          height: 56,
+          borderRadius: '50%',
+          background: 'rgba(105, 171, 74, 0.14)',
+          color: SUBMIT_GREEN,
+          flexShrink: 0,
+        }}
+        aria-hidden="true"
+      >
+        <Icon src={Undo} style={{ width: 28, height: 28 }} />
+      </span>
+      {isMobile ? (
+        <h3 style={{ margin: 0, textAlign: 'center', fontSize: 16, fontWeight: 700, color: '#111827' }}>
+          Oops! Did you press Back by mistake?
+        </h3>
+      ) : (
+        <ModalDialog.Title style={{ margin: 0, textAlign: 'center' }}>
+          Oops! Did you press Back by mistake?
+        </ModalDialog.Title>
+      )}
+    </div>
+  );
+
+  const safeBanner = (
+    <div style={{ maxWidth: 560, paddingBottom: 4 }}>
       <div
         style={{
           display: 'flex',
-          flexDirection: 'column',
           alignItems: 'center',
-          textAlign: 'center',
-          gap: 14,
-          paddingTop: 8,
-          paddingRight: 24,
-          width: '100%',
+          gap: 12,
+          background: 'rgba(105, 171, 74, 0.1)',
+          border: '1px solid rgba(105, 171, 74, 0.22)',
+          borderRadius: 10,
+          padding: '12px 14px',
+          color: '#166534',
+          fontSize: 14,
+          lineHeight: 1.5,
+          fontWeight: 500,
         }}
       >
         <span
@@ -82,97 +125,95 @@ export const BackNavigationModal: React.FC<Props> = ({
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
-            width: 56,
-            height: 56,
+            width: 28,
+            height: 28,
             borderRadius: '50%',
-            background: 'rgba(105, 171, 74, 0.14)',
+            background: 'rgba(105, 171, 74, 0.18)',
             color: SUBMIT_GREEN,
             flexShrink: 0,
           }}
           aria-hidden="true"
         >
-          <Icon src={Undo} style={{ width: 28, height: 28 }} />
+          <Icon src={CheckCircle} style={{ width: 18, height: 18 }} />
         </span>
-        <ModalDialog.Title style={{ margin: 0, textAlign: 'center' }}>
-          Oops! Did you press Back by mistake?
-        </ModalDialog.Title>
+        <span>All your changes are safe. You won&apos;t lose any progress.</span>
       </div>
-    </ModalDialog.Header>
+    </div>
+  );
 
-    <ModalDialog.Body>
-      <div style={{ maxWidth: 560, paddingBottom: 4 }}>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-            background: 'rgba(105, 171, 74, 0.1)',
-            border: '1px solid rgba(105, 171, 74, 0.22)',
-            borderRadius: 10,
-            padding: '12px 14px',
-            color: '#166534',
-            fontSize: 14,
-            lineHeight: 1.5,
-            fontWeight: 500,
-          }}
-        >
-          <span
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: 28,
-              height: 28,
-              borderRadius: '50%',
-              background: 'rgba(105, 171, 74, 0.18)',
-              color: SUBMIT_GREEN,
-              flexShrink: 0,
-            }}
-            aria-hidden="true"
-          >
-            <Icon src={CheckCircle} style={{ width: 18, height: 18 }} />
-          </span>
-          <span>All your changes are safe. You won&apos;t lose any progress.</span>
-        </div>
-      </div>
-    </ModalDialog.Body>
-
-    <ModalDialog.Footer>
-      <div
+  const footerButtons = (
+    <div
+      style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        gap: 12,
+        width: '100%',
+        marginTop: isMobile ? 16 : 0,
+      }}
+    >
+      <button
+        type="button"
+        onClick={onContinueHere}
+        disabled={isSaving}
         style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          gap: 12,
-          width: '100%',
+          ...primaryBtnStyle,
+          opacity: isSaving ? 0.6 : 1,
+          cursor: isSaving ? 'not-allowed' : 'pointer',
         }}
       >
-        <button
-          type="button"
-          onClick={onContinueHere}
-          disabled={isSaving}
-          style={{
-            ...primaryBtnStyle,
-            opacity: isSaving ? 0.6 : 1,
-            cursor: isSaving ? 'not-allowed' : 'pointer',
-          }}
-        >
-          Continue Here
-        </button>
+        Continue Here
+      </button>
 
-        <button
-          type="button"
-          onClick={onSaveAndGoBack}
-          disabled={isSaving}
-          style={{
-            ...secondaryBtnStyle,
-            opacity: isSaving ? 0.6 : 1,
-            cursor: isSaving ? 'not-allowed' : 'pointer',
-          }}
-        >
-          {isSaving ? 'Saving...' : 'Save & Go Back'}
-        </button>
-      </div>
-    </ModalDialog.Footer>
-  </ModalDialog>
-);
+      <button
+        type="button"
+        onClick={onSaveAndGoBack}
+        disabled={isSaving}
+        style={{
+          ...secondaryBtnStyle,
+          opacity: isSaving ? 0.6 : 1,
+          cursor: isSaving ? 'not-allowed' : 'pointer',
+        }}
+      >
+        {isSaving ? 'Saving...' : 'Save & Go Back'}
+      </button>
+    </div>
+  );
+
+  if (isMobile) {
+    return (
+      <MobileActionModal
+        isOpen={isOpen}
+        title="Oops! Did you press Back by mistake?"
+        onClose={onClose}
+      >
+        {headerBlock}
+        <div style={{ marginTop: 12 }}>{safeBanner}</div>
+        {footerButtons}
+      </MobileActionModal>
+    );
+  }
+
+  return (
+    <ModalDialog
+      title="Oops! Did you press Back by mistake?"
+      isOpen={isOpen}
+      onClose={onClose}
+      size="md"
+      hasCloseButton
+      isOverflowVisible={false}
+    >
+      <ModalDialog.Header>
+        {headerBlock}
+      </ModalDialog.Header>
+
+      <ModalDialog.Body>
+        {safeBanner}
+      </ModalDialog.Body>
+
+      <ModalDialog.Footer>
+        {footerButtons}
+      </ModalDialog.Footer>
+    </ModalDialog>
+  );
+};
