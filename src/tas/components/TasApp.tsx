@@ -30,6 +30,7 @@ import { navigateBackToAssignment } from '../utils/navigateBackToAssignment';
 import { getActiveFields, isFieldEmpty } from '../utils/activeFields';
 import { resolveFieldLayout, FIELD_TEXT_FONT_FAMILY } from '../utils/fieldLayout';
 import { clampFormDataToFields } from '../utils/clampTextToField';
+import { isApkWebView } from '../utils/isApkWebView';
 import type { FormField, SubmissionVersion } from '../types';
 
 const SUBMIT_GREEN = '#69AB4A';
@@ -184,12 +185,33 @@ export const TasApp: React.FC = () => {
   }, [submission?.id, submission?.status, submission?.feedback?.status, submission?.version_number]);
 
   // ── Print / Save as PDF ───────────────────────────────────────────────────
-  const handlePrint = useCallback(() => {
+  const handlePrint = useCallback(async () => {
     // Close editor first so toolbar actions work over the popup backdrop.
     // formData (committed values) is unchanged; only dismisses the popup UI.
     useTasStore.getState().closeFieldEditor();
 
     if (!selectedTemplate) return;
+
+    if (isApkWebView()) {
+      if (!submission?.id) return;
+      try {
+        setIsSaving(true);
+        const { preview_pdf_url } = await submissionsApi.previewPdf(
+          submission.id,
+          formData,
+        );
+        if (preview_pdf_url) {
+          window.location.assign(preview_pdf_url);
+        }
+      } catch (err: any) {
+        const msg = err?.response?.data?.detail || 'Failed to save PDF.';
+        alert(msg);
+      } finally {
+        setIsSaving(false);
+      }
+      return;
+    }
+
     const imageW = selectedTemplate.image_width || 794;
     const imageH = selectedTemplate.image_height || 1123;
 
@@ -296,7 +318,7 @@ export const TasApp: React.FC = () => {
     window.setTimeout(() => {
       iframe.remove();
     }, 60_000);
-  }, [selectedTemplate, formData, isMobile]);
+  }, [selectedTemplate, formData, isMobile, submission?.id, setIsSaving]);
 
   // ── Save draft handler ─────────────────────────────────────────────────────
   const handleSaveDraft = useCallback(async () => {
@@ -631,19 +653,21 @@ export const TasApp: React.FC = () => {
               >
                 Edit Assignment
               </button>
-              <button
-                type="button"
-                onClick={() => setClearConfirmOpen(true)}
-                disabled={isSaving}
-                style={{
-                  ...btnBase,
-                  background: '#f3f4f6',
-                  color: '#374151',
-                  opacity: isSaving ? 0.5 : 1,
-                }}
-              >
-                Clear All
-              </button>
+              {!isApkWebView() && (
+                <button
+                  type="button"
+                  onClick={() => setClearConfirmOpen(true)}
+                  disabled={isSaving}
+                  style={{
+                    ...btnBase,
+                    background: '#f3f4f6',
+                    color: '#374151',
+                    opacity: isSaving ? 0.5 : 1,
+                  }}
+                >
+                  Clear All
+                </button>
+              )}
             </>
           )}
 

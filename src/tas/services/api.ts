@@ -287,6 +287,17 @@ export const submissionsApi = {
     return mapSubmission(data);
   },
 
+  previewPdf: async (
+    id: string,
+    form_data: Record<string, string>,
+  ): Promise<{ preview_pdf_url: string }> => {
+    const { data } = await http().post(
+      `${tasBase()}/student-submission/${id}/preview-pdf/`,
+      { form_data },
+    );
+    return { preview_pdf_url: data.preview_pdf_url };
+  },
+
   getPdf: async (id: string): Promise<PdfStatusResponse> => {
     const { data } = await http().get(`${tasBase()}/student-submission/${id}/pdf/`);
     return { pdf_url: data.pdf_url ?? null, status: data.status };
