@@ -3,13 +3,13 @@
  * Create, edit, and deactivate template types.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Button, Badge, Spinner, Form, Alert,
+  Button, Badge, Spinner, Form, Alert, AlertModal,
 } from '@openedx/paragon';
-import { Add, ArrowBack, Close, Edit } from '@openedx/paragon/icons';
-import { templateTypesApi } from '../../services/api';
+import { Add, ArrowBack, Close, Edit, WarningAmber } from '@openedx/paragon/icons';
+import { templateTypesApi, templatesApi } from '../../services/api';
 import type { TemplateType } from '../../types';
 
 interface Props {
@@ -27,11 +27,29 @@ export const AdminTemplateTypeManager: React.FC<Props> = ({ onBack }) => {
   const [form, setForm] = useState(EMPTY_FORM);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [depsBlockedModalOpen, setDepsBlockedModalOpen] = useState(false);
+  const [depsBlockedMessage, setDepsBlockedMessage] = useState('');
 
   const { data, isLoading } = useQuery({
     queryKey: ['template-types-all'],
     queryFn: () => templateTypesApi.list(),
   });
+
+  const { data: templatesData, isLoading: templatesDepsLoading } = useQuery({
+    queryKey: ['admin-templates', 'dependency-count'],
+    queryFn: () => templatesApi.list({ active_only: false }),
+  });
+
+  const templateCountByTypeId = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const t of templatesData?.results ?? []) {
+      const tid = t.template_type_id || t.template_type?.id;
+      if (tid === undefined || tid === '') continue;
+      const k = String(tid);
+      m.set(k, (m.get(k) ?? 0) + 1);
+    }
+    return m;
+  }, [templatesData]);
 
   const createMut = useMutation({
     mutationFn: (body: Omit<TemplateType, 'id'>) => templateTypesApi.create(body),
@@ -63,7 +81,9 @@ export const AdminTemplateTypeManager: React.FC<Props> = ({ onBack }) => {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['template-types-all'] });
       qc.invalidateQueries({ queryKey: ['template-types'] });
+      qc.invalidateQueries({ queryKey: ['admin-templates'] });
     },
+    onError: (e: any) => setError(e?.response?.data ? JSON.stringify(e.response.data) : e.message),
   });
 
   const handleNameChange = (name: string) => {
@@ -77,9 +97,16 @@ export const AdminTemplateTypeManager: React.FC<Props> = ({ onBack }) => {
 
   const handleSubmit = () => {
     if (!form.name.trim()) { setError('Name is required.'); return; }
-    if (!form.slug.trim()) { setError('Slug is required.'); return; }
     setError('');
-    const body = { name: form.name.trim(), slug: form.slug.trim(), description: form.description.trim(), is_active: true };
+    const name = form.name.trim();
+    const slug = (editingId ? form.slug : toSlug(name)).trim();
+    if (!slug) { setError('Name must contain letters or numbers.'); return; }
+    const body = {
+      name,
+      slug,
+      description: form.description.trim(),
+      is_active: true,
+    };
     if (editingId) {
       updateMut.mutate({ id: editingId, body });
     } else {
@@ -131,17 +158,6 @@ export const AdminTemplateTypeManager: React.FC<Props> = ({ onBack }) => {
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleNameChange(e.target.value)}
               placeholder="e.g. Lab Report"
             />
-          </Form.Group>
-
-          <Form.Group controlId="tt-slug" className="mb-3">
-            <Form.Label>Slug <span className="text-danger">*</span></Form.Label>
-            <Form.Control
-              size="sm"
-              value={form.slug}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm((p) => ({ ...p, slug: e.target.value }))}
-              placeholder="e.g. lab-report"
-            />
-            <Form.Text muted>URL-safe identifier, auto-generated from name</Form.Text>
           </Form.Group>
 
           <Form.Group controlId="tt-desc" className="mb-4">
@@ -205,10 +221,11 @@ export const AdminTemplateTypeManager: React.FC<Props> = ({ onBack }) => {
                       {tt.is_active ? 'Active' : 'Inactive'}
                     </Badge>
                   </div>
-                  <div className="text-muted" style={{ fontSize: 11 }}>
-                    slug: <code>{tt.slug}</code>
-                    {tt.description && <> &nbsp;·&nbsp; {tt.description}</>}
-                  </div>
+                  {tt.description && (
+                    <div className="text-muted" style={{ fontSize: 11 }}>
+                      {tt.description}
+                    </div>
+                  )}
                 </div>
 
                 <Button
@@ -227,9 +244,17 @@ export const AdminTemplateTypeManager: React.FC<Props> = ({ onBack }) => {
                   className="text-danger"
                   iconBefore={Close}
                   onClick={() => {
+                    const dependentCount = templateCountByTypeId.get(String(tt.id)) ?? 0;
+                    if (dependentCount > 0) {
+                      setDepsBlockedMessage(
+                        `Cannot deactivate "${tt.name}". ${dependentCount} template${dependentCount === 1 ? '' : 's'} still use this type. Delete or reassign those templates first.`,
+                      );
+                      setDepsBlockedModalOpen(true);
+                      return;
+                    }
                     if (window.confirm(`Deactivate "${tt.name}"?`)) deleteMut.mutate(tt.id);
                   }}
-                  disabled={deleteMut.isPending || !tt.is_active}
+                  disabled={deleteMut.isPending || !tt.is_active || templatesDepsLoading}
                 >
                   {' '}
                 </Button>
@@ -238,6 +263,23 @@ export const AdminTemplateTypeManager: React.FC<Props> = ({ onBack }) => {
           </div>
         </div>
       </div>
+
+      <AlertModal
+        variant="warning"
+        icon={WarningAmber}
+        title="Templates depend on this type"
+        isOpen={depsBlockedModalOpen}
+        onClose={() => setDepsBlockedModalOpen(false)}
+        footerNode={(
+          <Button variant="primary" size="sm" onClick={() => setDepsBlockedModalOpen(false)}>
+            OK
+          </Button>
+        )}
+        hasCloseButton
+        size="sm"
+      >
+        <p className="mb-0 small">{depsBlockedMessage}</p>
+      </AlertModal>
     </div>
   );
 };
