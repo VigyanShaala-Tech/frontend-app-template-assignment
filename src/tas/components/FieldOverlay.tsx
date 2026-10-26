@@ -7,6 +7,7 @@
 import React from 'react';
 import { useTasStore } from '../store/tasStore';
 import { resolveFieldLayout, fieldTextStyle } from '../utils/fieldLayout';
+import { resolveFittingFontSize } from '../utils/textFitsInField';
 import type { FormField, FieldPosition } from '../types';
 
 interface FieldOverlayProps {
@@ -33,10 +34,17 @@ export const FieldOverlay: React.FC<FieldOverlayProps> = ({
   actualImageHeight,
   isReadOnly = false,
 }) => {
-  const { openFieldEditor, formData, isMobile, submission, fieldCapacityFull } = useTasStore();
+  const {
+    openFieldEditor, formData, isMobile, submission, fieldCapacityFull,
+    editorDraft, isFieldEditorOpen,
+  } = useTasStore();
 
   const layout = resolveFieldLayout(field, position, actualImageWidth, actualImageHeight);
-  const fieldValue = formData[field.id] ?? '';
+  const committedValue = formData[field.id] ?? '';
+  const fieldValue = isFieldEditorOpen && editorDraft?.fieldId === field.id
+    ? editorDraft.value
+    : committedValue;
+  const displayFontSize = resolveFittingFontSize(fieldValue, layout);
   const hasValue = fieldValue.trim().length > 0;
   const isSubmitted = submission?.status === 'submitted';
   const isInactive = isReadOnly || isSubmitted;
@@ -68,7 +76,7 @@ export const FieldOverlay: React.FC<FieldOverlayProps> = ({
     ? 'rgba(34,197,94,0.08)'
     : 'rgba(255,255,255,0.15)';
 
-  const textStyles = fieldTextStyle(layout);
+  const textStyles = fieldTextStyle({ ...layout, fontSize: displayFontSize });
 
   return (
     <div
@@ -149,6 +157,7 @@ export const FieldOverlay: React.FC<FieldOverlayProps> = ({
             inset: 0,
             overflow: 'hidden',
             ...textStyles,
+            WebkitTextFillColor: '#111827',
             // padding already in textStyles; inset:0 + box padding matches PDF inset
           }}
         >

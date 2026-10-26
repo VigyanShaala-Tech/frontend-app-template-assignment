@@ -30,6 +30,7 @@ import { navigateBackToAssignment } from '../utils/navigateBackToAssignment';
 import { getActiveFields, isFieldEmpty } from '../utils/activeFields';
 import { resolveFieldLayout, FIELD_TEXT_FONT_FAMILY } from '../utils/fieldLayout';
 import { clampFormDataToFields } from '../utils/clampTextToField';
+import { resolveFittingFontSize, textFitsAtMinimumFont } from '../utils/textFitsInField';
 import type { FormField, SubmissionVersion } from '../types';
 
 const SUBMIT_GREEN = '#69AB4A';
@@ -198,14 +199,15 @@ export const TasApp: React.FC = () => {
       const value = formData[field.id] ?? '';
       if (!pos || !value) return '';
       const layout = resolveFieldLayout(field, pos, imageW, imageH);
+      const displayFontSize = resolveFittingFontSize(value, layout);
       return `
         <div style="
           position:absolute;
           left:${pos.x}%;top:${pos.y}%;
           width:${pos.width}%;height:${pos.height}%;
           font-family:${FIELD_TEXT_FONT_FAMILY};
-          font-size:${layout.fontSize}px;
-          font-weight:400;color:#111827;
+          font-size:${displayFontSize}px;
+          font-weight:400;color:#111827;-webkit-text-fill-color:#111827;
           overflow:hidden;padding:2px;box-sizing:border-box;
           line-height:1.3;white-space:pre-wrap;
           overflow-wrap:anywhere;word-break:break-word;
@@ -216,6 +218,7 @@ export const TasApp: React.FC = () => {
       <title>${selectedTemplate.name}</title>
       <style>
         * { margin:0; padding:0; box-sizing:border-box; }
+        html { color-scheme: only light; }
         body { width:${imageW}px; }
         @page { size:${imageW}px ${imageH}px; margin:0; }
         @media print { body { width:${imageW}px; } }
@@ -332,7 +335,7 @@ export const TasApp: React.FC = () => {
       layoutsByFieldId[field.id] = resolveFieldLayout(field, pos, imageW, imageH);
     });
 
-    return clampFormDataToFields(data, layoutsByFieldId);
+    return clampFormDataToFields(data, layoutsByFieldId, textFitsAtMinimumFont);
   }, [selectedTemplate]);
 
   const submitAssignment = useCallback(async () => {
