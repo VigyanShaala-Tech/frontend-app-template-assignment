@@ -262,6 +262,9 @@ export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
     fontFamily: 'inherit',
     color: '#111827',
     background: '#f9fafb',
+    colorScheme: 'only light',
+    caretColor: '#111827',
+    WebkitTextFillColor: '#111827',
     transition: 'border-color 0.15s',
   };
 
@@ -308,6 +311,7 @@ export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
       case 'select':
         return (
           <select
+            className="tas-field-input"
             style={{ ...compactInputStyle, cursor: 'pointer' }}
             value={localValue}
             onChange={(e) => setLocalValue(e.target.value)}
@@ -323,6 +327,7 @@ export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
         return (
           <input
             type="date"
+            className="tas-field-input"
             style={compactInputStyle}
             value={localValue}
             onChange={(e) => setLocalValue(e.target.value)}
@@ -335,6 +340,7 @@ export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
         return (
           <input
             type="number"
+            className="tas-field-input"
             style={compactInputStyle}
             placeholder={field.placeholder || `Enter ${field.label}`}
             value={localValue}
@@ -348,6 +354,7 @@ export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
         return (
           <>
             <textarea
+              className="tas-field-input"
               style={{
                 ...textInputStyle,
                 minHeight: isMobile ? 56 : 120,

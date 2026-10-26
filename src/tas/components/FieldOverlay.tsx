@@ -157,6 +157,7 @@ export const FieldOverlay: React.FC<FieldOverlayProps> = ({
             inset: 0,
             overflow: 'hidden',
             ...textStyles,
+            WebkitTextFillColor: '#111827',
             // padding already in textStyles; inset:0 + box padding matches PDF inset
           }}
         >

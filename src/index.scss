@@ -16,6 +16,13 @@
   transition: border-color .15s ease, background-color .15s ease;
 }
 
+// Student field inputs stay dark on the light popup surface in a dark WebView.
+.tas-field-input::placeholder {
+  color: #9ca3af;
+  -webkit-text-fill-color: #9ca3af;
+  opacity: 1;
+}
+
 // Grading page — full-width predefined feedback dropdown with chip display
 .tas-feedback-multiselect {
   flex: 1 1 auto;

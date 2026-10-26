@@ -207,7 +207,7 @@ export const TasApp: React.FC = () => {
           width:${pos.width}%;height:${pos.height}%;
           font-family:${FIELD_TEXT_FONT_FAMILY};
           font-size:${displayFontSize}px;
-          font-weight:400;color:#111827;
+          font-weight:400;color:#111827;-webkit-text-fill-color:#111827;
           overflow:hidden;padding:2px;box-sizing:border-box;
           line-height:1.3;white-space:pre-wrap;
           overflow-wrap:anywhere;word-break:break-word;
@@ -218,6 +218,7 @@ export const TasApp: React.FC = () => {
       <title>${selectedTemplate.name}</title>
       <style>
         * { margin:0; padding:0; box-sizing:border-box; }
+        html { color-scheme: only light; }
         body { width:${imageW}px; }
         @page { size:${imageW}px ${imageH}px; margin:0; }
         @media print { body { width:${imageW}px; } }
