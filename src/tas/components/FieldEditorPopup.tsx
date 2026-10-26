@@ -33,6 +33,7 @@ import {
   resolveFieldLayout,
 } from '../utils/fieldLayout';
 import { applyTextCandidate } from '../utils/clampTextToField';
+import { textFitsAtMinimumFont } from '../utils/textFitsInField';
 
 interface Props {
   field: FormField | null;
@@ -181,6 +182,7 @@ export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
     selectedTemplate,
     setFieldCapacityFull,
     fieldCapacityFull,
+    setEditorDraft,
   } = useTasStore();
 
   const viewportRect = useVisualViewportRect(isFieldEditorOpen && isMobile);
@@ -216,13 +218,15 @@ export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
       setLocalValue(candidate);
       acceptedValueRef.current = candidate;
       setFieldCapacityFull(field.id, false);
+      setEditorDraft(field.id, candidate);
       return;
     }
     const previous = acceptedValueRef.current;
-    const result = applyTextCandidate(previous, candidate, fieldLayout);
+    const result = applyTextCandidate(previous, candidate, fieldLayout, textFitsAtMinimumFont);
     setLocalValue(result.value);
     acceptedValueRef.current = result.value;
     setFieldCapacityFull(field.id, result.capacityFull);
+    setEditorDraft(field.id, result.value);
   };
 
   if (!field || !isFieldEditorOpen) return null;
@@ -272,21 +276,29 @@ export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
     WebkitTextSizeAdjust: '100%',
   };
 
+  const maxChars = field.maxChars ?? 60;
+  const limitToMaxChars = (value: string) => value.slice(0, maxChars);
+
   const handleTextChange = (value: string) => {
+    const limited = limitToMaxChars(value);
     if (composingRef.current) {
-      setLocalValue(value);
+      setLocalValue(limited);
       return;
     }
-    applyCapacityGatedValue(value);
+    applyCapacityGatedValue(limited);
   };
 
   const handleCompositionStart = () => {
     composingRef.current = true;
   };
 
+  const handleCompositionUpdate = (e: React.CompositionEvent<HTMLTextAreaElement>) => {
+    setLocalValue(limitToMaxChars(e.currentTarget.value));
+  };
+
   const handleCompositionEnd = (e: React.CompositionEvent<HTMLTextAreaElement>) => {
     composingRef.current = false;
-    applyCapacityGatedValue(e.currentTarget.value);
+    applyCapacityGatedValue(limitToMaxChars(e.currentTarget.value));
   };
 
   const isCapacityFull = Boolean(field && fieldCapacityFull[field.id]);
@@ -343,12 +355,17 @@ export const FieldEditorPopup: React.FC<Props> = ({ field, fields }) => {
               }}
               placeholder={field.placeholder || `Enter ${field.label}`}
               value={localValue}
+              maxLength={maxChars}
               onChange={(e) => handleTextChange(e.target.value)}
               onCompositionStart={handleCompositionStart}
+              onCompositionUpdate={handleCompositionUpdate}
               onCompositionEnd={handleCompositionEnd}
               onFocus={handleInputFocus}
               autoFocus
             />
+            <div style={{ fontSize: 12, color: localValue.length >= maxChars ? '#ef4444' : '#9ca3af', textAlign: 'right', marginTop: -8 }}>
+              {localValue.length}/{maxChars}
+            </div>
             {isCapacityFull && (
               <div
                 style={{
