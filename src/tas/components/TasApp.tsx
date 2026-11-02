@@ -150,7 +150,9 @@ export const TasApp: React.FC = () => {
       if (intervalId) clearInterval(intervalId);
       window.removeEventListener('focus', refresh);
     };
-  }, [submission?.id, submission?.status, submission?.feedback, setSubmission]);
+    // Status is a string. Depending on the feedback object restarts this effect
+    // on every response, because each response allocates a new object.
+  }, [submission?.id, submission?.status, submission?.feedback?.status, setSubmission]);
 
   // Load submitted version history for the student Submission History panel
   useEffect(() => {
