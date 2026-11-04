@@ -3,7 +3,7 @@
  * Two-panel: left = metadata + fields, right = canvas with draggable field overlays.
  */
 
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import {
@@ -36,7 +36,165 @@ interface FieldRowProps {
   onDragEnd: () => void;
 }
 
-const FONT_SIZES = [8, 9, 10, 11, 12, 13, 14, 16, 18, 20, 24];
+const FONT_SIZES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16, 18, 20, 24];
+
+const FontSizeDropdown: React.FC<{
+  value: number;
+  onChange: (fontSize: number) => void;
+}> = ({ value, onChange }) => {
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+  const listId = React.useId();
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onPointerDown = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    return () => document.removeEventListener('mousedown', onPointerDown);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    listRef.current?.querySelector<HTMLElement>(`[data-index="${activeIndex}"]`)
+      ?.scrollIntoView({ block: 'nearest' });
+  }, [open, activeIndex]);
+
+  const openAtCurrent = () => {
+    const idx = FONT_SIZES.indexOf(value);
+    setActiveIndex(idx >= 0 ? idx : 0);
+    setOpen(true);
+  };
+
+  const selectSize = (raw: string) => {
+    onChange(parseInt(raw, 10));
+    setOpen(false);
+  };
+
+  const onKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (!open) {
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        openAtCurrent();
+      }
+      return;
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      setOpen(false);
+      return;
+    }
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setActiveIndex((index) => Math.min(FONT_SIZES.length - 1, index + 1));
+      return;
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setActiveIndex((index) => Math.max(0, index - 1));
+      return;
+    }
+    if (event.key === 'Home') {
+      event.preventDefault();
+      setActiveIndex(0);
+      return;
+    }
+    if (event.key === 'End') {
+      event.preventDefault();
+      setActiveIndex(FONT_SIZES.length - 1);
+      return;
+    }
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      selectSize(String(FONT_SIZES[activeIndex]));
+    }
+  };
+
+  const activeId = `${listId}-option-${FONT_SIZES[activeIndex]}`;
+
+  return (
+    <div ref={rootRef} style={{ position: 'relative' }}>
+      <button
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={listId}
+        aria-activedescendant={open ? activeId : undefined}
+        aria-label="Font size (px)"
+        onClick={() => (open ? setOpen(false) : openAtCurrent())}
+        onKeyDown={onKeyDown}
+        onBlur={(event) => {
+          if (!rootRef.current?.contains(event.relatedTarget as Node | null)) setOpen(false);
+        }}
+        style={{
+          width: '100%',
+          textAlign: 'left',
+          background: '#fff',
+          border: '1px solid #ced4da',
+          borderRadius: 4,
+          padding: '4px 8px',
+          fontSize: 13,
+          lineHeight: 1.5,
+          color: '#111827',
+          cursor: 'pointer',
+        }}
+      >
+        {value}px
+      </button>
+      {open && (
+        <ul
+          id={listId}
+          ref={listRef}
+          role="listbox"
+          aria-label="Font size (px)"
+          style={{
+            position: 'absolute',
+            zIndex: 20,
+            left: 0,
+            right: 0,
+            top: '100%',
+            margin: '2px 0 0',
+            padding: 0,
+            listStyle: 'none',
+            maxHeight: 180,
+            overflowY: 'auto',
+            background: '#fff',
+            border: '1px solid #d1d5db',
+            borderRadius: 6,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+          }}
+        >
+          {FONT_SIZES.map((size, index) => (
+            <li
+              key={size}
+              id={`${listId}-option-${size}`}
+              role="option"
+              aria-selected={size === value}
+              data-index={index}
+              onMouseEnter={() => setActiveIndex(index)}
+              onMouseDown={(event) => {
+                event.preventDefault();
+                selectSize(String(size));
+              }}
+              style={{
+                padding: '6px 8px',
+                fontSize: 13,
+                cursor: 'pointer',
+                background: index === activeIndex ? '#eff6ff' : '#fff',
+                fontWeight: size === value ? 600 : 400,
+              }}
+            >
+              {size}px
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+};
 
 const FieldRow: React.FC<FieldRowProps> = ({
   field, index, isSelected, isDragOver,
@@ -161,14 +319,10 @@ const FieldRow: React.FC<FieldRowProps> = ({
             <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>
               Font size (px)
             </label>
-            <Form.Control
-              as="select"
+            <FontSizeDropdown
               value={field.fontSize ?? 14}
-              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => onChange({ ...field, fontSize: parseInt(e.target.value, 10) })}
-              size="sm"
-            >
-              {FONT_SIZES.map((s) => <option key={s} value={s}>{s}px</option>)}
-            </Form.Control>
+              onChange={(fontSize) => onChange({ ...field, fontSize })}
+            />
           </div>
           <div style={{ flex: 1 }}>
             <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>

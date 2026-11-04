@@ -149,6 +149,7 @@ export const TemplateCanvas: React.FC<Props> = ({ template, readOnly = false }) 
                   borderRadius: 4,
                   overflow: 'hidden',
                   background: '#fff',
+                  colorScheme: 'only light',
                 }}
               >
                 {template.image_url ? (

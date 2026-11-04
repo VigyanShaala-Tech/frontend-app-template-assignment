@@ -37,6 +37,10 @@ interface TasState {
   setFieldCapacityFullMap: (map: Record<string, boolean>) => void;
   clearFieldCapacityFull: () => void;
 
+  // ── Uncommitted editor text for overlay font fitting (not formData) ────────
+  editorDraft: { fieldId: string; value: string } | null;
+  setEditorDraft: (fieldId: string, value: string) => void;
+
   // ── Canvas state ───────────────────────────────────────────────────────────
   canvasState: CanvasState;
   setCanvasState: (state: Partial<CanvasState>) => void;
@@ -84,6 +88,7 @@ export const useTasStore = create<TasState>((set, get) => ({
       selectedTemplateBlockId: templateBlockId,
       formData: {},
       fieldCapacityFull: {},
+      editorDraft: null,
       submission: null,
       canvasState: DEFAULT_CANVAS,
       selectedFieldId: null,
@@ -100,7 +105,7 @@ export const useTasStore = create<TasState>((set, get) => ({
   setFormValue: (fieldId, value) =>
     set((state) => ({ formData: { ...state.formData, [fieldId]: value } })),
   setFormData: (data) => set({ formData: data }),
-  clearFormData: () => set({ formData: {}, fieldCapacityFull: {} }),
+  clearFormData: () => set({ formData: {}, fieldCapacityFull: {}, editorDraft: null }),
 
   // Capacity warnings
   fieldCapacityFull: {},
@@ -118,6 +123,11 @@ export const useTasStore = create<TasState>((set, get) => ({
   setFieldCapacityFullMap: (map) => set({ fieldCapacityFull: map }),
   clearFieldCapacityFull: () => set({ fieldCapacityFull: {} }),
 
+  // Editor draft is overlay-only. Closing or switching fields drops it so
+  // an unsaved popup still discards back to formData.
+  editorDraft: null,
+  setEditorDraft: (fieldId, value) => set({ editorDraft: { fieldId, value } }),
+
   // Canvas
   canvasState: DEFAULT_CANVAS,
   setCanvasState: (newState) =>
@@ -131,9 +141,9 @@ export const useTasStore = create<TasState>((set, get) => ({
   // Field editor
   isFieldEditorOpen: false,
   openFieldEditor: (fieldId) =>
-    set({ isFieldEditorOpen: true, selectedFieldId: fieldId }),
+    set({ isFieldEditorOpen: true, selectedFieldId: fieldId, editorDraft: null }),
   closeFieldEditor: () =>
-    set({ isFieldEditorOpen: false, selectedFieldId: null }),
+    set({ isFieldEditorOpen: false, selectedFieldId: null, editorDraft: null }),
 
   // View
   isPreviewMode: false,
@@ -160,6 +170,7 @@ export const useTasStore = create<TasState>((set, get) => ({
       submission: null,
       formData: {},
       fieldCapacityFull: {},
+      editorDraft: null,
       selectedFieldId: null,
       isFieldEditorOpen: false,
       isPreviewMode: false,
