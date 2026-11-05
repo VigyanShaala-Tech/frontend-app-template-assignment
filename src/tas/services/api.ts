@@ -7,6 +7,7 @@
 
 import { getAuthenticatedHttpClient } from '@edx/frontend-platform/auth';
 import { getConfig } from '@edx/frontend-platform';
+import type { FieldEvaluationRubricRow } from '../utils/fieldEvaluation';
 import type {
   TemplateType,
   Template,
@@ -21,6 +22,8 @@ import type {
   PdfStatusResponse,
   TemplateCreateBody,
   TemplateUpdateBody,
+  WeightedFeedbackRow,
+  WeightedSection,
 } from '../types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -319,10 +322,17 @@ function mapRubric(raw: any): Rubric {
   return {
     id: String(raw.id),
     name: raw.name,
+    schema_version: raw.schema_version === 2 ? 2 : 1,
     criteria: raw.criteria ?? [],
+    sections: raw.sections ?? [],
+    template_id: raw.template != null ? String(raw.template) : null,
     is_active: raw.is_active,
   };
 }
+
+export type RubricSaveBody =
+  | { name: string; schema_version?: 1; criteria: RubricCriterion[] }
+  | { name: string; schema_version: 2; sections: WeightedSection[]; template: number | null };
 
 export const rubricsApi = {
   list: async (): Promise<{ count: number; results: Rubric[] }> => {
@@ -336,12 +346,12 @@ export const rubricsApi = {
     };
   },
 
-  create: async (body: { name: string; criteria: RubricCriterion[] }): Promise<Rubric> => {
+  create: async (body: RubricSaveBody): Promise<Rubric> => {
     const { data } = await http().post(`${tasBase()}/rubrics/`, body);
     return mapRubric(data);
   },
 
-  update: async (id: string, body: { name?: string; criteria?: RubricCriterion[] }): Promise<Rubric> => {
+  update: async (id: string, body: Partial<RubricSaveBody>): Promise<Rubric> => {
     const { data } = await http().patch(`${tasBase()}/rubrics/${id}/`, body);
     return mapRubric(data);
   },
@@ -454,7 +464,11 @@ export const adminSubmissionsApi = {
 
   submitFeedback: async (
     submissionId: string,
-    payload: { rubrics?: RubricFeedbackEntry[]; comment?: string; status?: string },
+    payload: {
+      rubrics?: Array<RubricFeedbackEntry | FieldEvaluationRubricRow | WeightedFeedbackRow>;
+      comment?: string;
+      status?: string;
+    },
   ): Promise<void> => {
     await http().post(`${tasBase()}/submissions/${submissionId}/feedback/`, payload);
   },
